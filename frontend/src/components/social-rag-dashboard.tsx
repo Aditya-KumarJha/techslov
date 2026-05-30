@@ -13,7 +13,7 @@ import type {
 import { ChatPanel } from "./chat-panel";
 import { IngestForm } from "./ingest-form";
 import { VideoCard } from "./video-card";
-import { LinkIcon, SparkIcon } from "./ui-icons";
+import { SparkIcon } from "./ui-icons";
 
 const SAMPLE_YOUTUBE_URL = "";
 const SAMPLE_INSTAGRAM_URL = "";
@@ -189,7 +189,7 @@ export function SocialRagDashboard() {
 
   return (
     <main className="min-h-screen text-slate-100">
-      <div className="mx-auto grid min-h-screen w-full max-w-screen-2xl grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_360px]">
+      <div className="mx-auto grid min-h-screen w-full max-w-screen-2xl grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_420px]">
         <aside className="hidden border-r border-white/10 bg-[rgba(255,255,255,0.02)] px-4 py-4 lg:flex lg:flex-col lg:sticky lg:top-6 lg:self-start lg:overflow-hidden">
           <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
             <div className="flex items-center gap-3">

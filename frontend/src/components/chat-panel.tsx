@@ -31,6 +31,11 @@ export function ChatPanel({
   onPromptSelect,
   onSubmit,
 }: ChatPanelProps) {
+  // Filter out empty assistant placeholders so they don't render
+  const visibleMessages = messages.filter(
+    (m) => !(m.role === "assistant" && (!m.content || !m.content.trim())),
+  );
+
   return (
     <section className="flex h-full min-h-0 flex-col rounded-[28px] border border-white/10 bg-[rgba(255,255,255,0.03)] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-5">
       <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-4">
@@ -67,14 +72,11 @@ export function ChatPanel({
 
       <div className="mt-5 flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-black/20 p-4">
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-          {messages.length ? (
-            messages.map((message, index) => {
+          {visibleMessages.length ? (
+            visibleMessages.map((message, index) => {
               const isUser = message.role === "user";
               return (
-                <div
-                  key={`${message.role}-${index}`}
-                  className={`flex w-full items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}
-                >
+                <div key={`${message.role}-${index}`} className="flex w-full items-start gap-3 justify-center">
                   {!isUser ? (
                     <div className="shrink-0">
                       <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-800 text-xs font-semibold text-white">AI</div>
@@ -83,9 +85,7 @@ export function ChatPanel({
 
                   <article
                     className={`w-fit max-w-2xl rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm wrap-break-word ${
-                      isUser
-                        ? "ml-auto border-white/10 bg-white/10 text-white"
-                        : "border-white/10 bg-white/5 text-slate-100"
+                      isUser ? "border-white/10 bg-white/10 text-white" : "border-white/10 bg-white/5 text-slate-100"
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{message.content}</p>
@@ -108,7 +108,7 @@ export function ChatPanel({
           )}
 
           {isStreaming ? (
-            <div className="flex w-full items-start gap-3">
+            <div className="flex w-full items-start gap-3 justify-center">
               <div className="shrink-0">
                 <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-800 text-xs font-semibold text-white">AI</div>
               </div>
