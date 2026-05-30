@@ -1,12 +1,16 @@
-export function formatCompactNumber(value: number) {
+export function formatCompactNumber(value: number | null | undefined) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+
   return new Intl.NumberFormat("en", {
     notation: "compact",
     maximumFractionDigits: 1,
-  }).format(value);
+  }).format(value as number);
 }
 
-export function formatPercent(value: number) {
-  return `${value.toFixed(2)}%`;
+export function formatPercent(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+
+  return `${Number(value).toFixed(2)}%`;
 }
 
 export function formatDuration(seconds: number) {

@@ -1,13 +1,17 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { ChatMessage } from "@/types/social-rag";
 import { CitationList } from "./citation-list";
 import { ChatBubbleIcon, SendIcon, SparkIcon } from "./ui-icons";
+import { formatTimeRange } from "@/lib/format";
 
 type ChatPanelProps = {
   conversationId: string | null;
+  conversationTitle: string;
   input: string;
   isStreaming: boolean;
+  isLoadingHistory: boolean;
   messages: ChatMessage[];
   onInputChange: (value: string) => void;
   onPromptSelect: (prompt: string) => void;
@@ -24,8 +28,10 @@ const QUICK_PROMPTS = [
 
 export function ChatPanel({
   conversationId,
+  conversationTitle,
   input,
   isStreaming,
+  isLoadingHistory,
   messages,
   onInputChange,
   onPromptSelect,
@@ -35,9 +41,21 @@ export function ChatPanel({
   const visibleMessages = messages.filter(
     (m) => !(m.role === "assistant" && (!m.content || !m.content.trim())),
   );
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    // scroll to bottom when messages change or streaming state changes
+    // use requestAnimationFrame to wait for DOM updates
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    });
+  }, [visibleMessages.length, isStreaming]);
 
   return (
-    <section className="flex h-full min-h-0 flex-col rounded-[28px] border border-white/10 bg-[rgba(255,255,255,0.03)] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-5">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[rgba(255,255,255,0.03)] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-5">
       <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-4">
         <div className="flex items-start gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-white">
@@ -45,8 +63,12 @@ export function ChatPanel({
           </div>
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-slate-400">Chat</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Where should we begin?</h2>
-            <p className="mt-1 text-sm text-slate-400">Ask about the two videos, then keep the thread moving.</p>
+            <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+              {conversationTitle || "New chat"}
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              {conversationId ? "Loaded thread saved to your history." : "Ask about the two videos, then keep the thread moving."}
+            </p>
           </div>
         </div>
 
@@ -70,31 +92,40 @@ export function ChatPanel({
         ))}
       </div>
 
-      <div className="mt-5 flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-black/20 p-4">
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-          {visibleMessages.length ? (
+      <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 p-4">
+        <div ref={messagesContainerRef as any} className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
+            {isLoadingHistory ? (
+            <div className="grid gap-2 rounded-2xl border border-dashed border-white/10 bg-white/5 p-6 text-sm leading-6 text-slate-400">
+              <span className="text-white">Loading conversation…</span>
+              <span>Fetching the saved messages for this thread.</span>
+            </div>
+          ) : visibleMessages.length ? (
             visibleMessages.map((message, index) => {
               const isUser = message.role === "user";
               return (
-                <div key={`${message.role}-${index}`} className="flex w-full items-start gap-3 justify-center">
+                <div key={`${message.role}-${index}`} className={`flex w-full items-end gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
                   {!isUser ? (
-                    <div className="shrink-0">
+                    <div className="shrink-0 self-end">
                       <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-800 text-xs font-semibold text-white">AI</div>
                     </div>
                   ) : null}
 
-                  <article
-                    className={`w-fit max-w-2xl rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm wrap-break-word ${
-                      isUser ? "border-white/10 bg-white/10 text-white" : "border-white/10 bg-white/5 text-slate-100"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap">{message.content}</p>
-                    {message.citations?.length ? <CitationList citations={message.citations} /> : null}
-                  </article>
+                  <div className={`w-fit max-w-2xl ${isUser ? 'justify-end' : ''}`}>
+                    <article
+                      className={`rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm wrap-break-word ${
+                        isUser
+                          ? "border-white/10 bg-white/12 text-white"
+                          : "border-white/10 bg-white/5 text-slate-100"
+                      }`}
+                    >
+                      {renderMessageContent(message.content)}
+                      {message.citations?.length ? <CitationList citations={message.citations} /> : null}
+                    </article>
+                  </div>
 
                   {isUser ? (
-                    <div className="shrink-0">
-                      <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-800 text-xs font-semibold text-white">ME</div>
+                    <div className="shrink-0 self-end">
+                      <div className="grid h-9 w-9 place-items-center rounded-full bg-white text-xs font-semibold text-slate-950">ME</div>
                     </div>
                   ) : null}
                 </div>
@@ -103,16 +134,19 @@ export function ChatPanel({
           ) : (
             <div className="grid gap-2 rounded-2xl border border-dashed border-white/10 bg-white/5 p-6 text-sm leading-6 text-slate-400">
               <span className="text-white">No messages yet.</span>
-              <span>Ingest two URLs, then ask a comparison question.</span>
+              <span>Ingest two URLs, then ask a comparison question or load a saved thread.</span>
             </div>
           )}
 
           {isStreaming ? (
-            <div className="flex w-full items-start gap-3 justify-center">
-              <div className="shrink-0">
+            <div className={`flex w-full items-end gap-3 justify-start`}>
+              <div className="shrink-0 self-end">
                 <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-800 text-xs font-semibold text-white">AI</div>
               </div>
-              <article className="w-fit max-w-2xl rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">Streaming answer…</article>
+
+              <article className={`w-fit max-w-2xl rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm wrap-break-word border-dashed border-white/10 bg-white/5 text-slate-300`}>
+                <p className="whitespace-pre-wrap">Streaming answer…</p>
+              </article>
             </div>
           ) : null}
         </div>
@@ -155,5 +189,53 @@ export function ChatPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function renderMessageContent(content: string) {
+  if (!content) return null;
+
+  // Simple bold parsing for **bold**
+  const parts: Array<string | { bold: string }> = [];
+  let rest = content;
+
+  while (rest.length) {
+    const start = rest.indexOf("**");
+    if (start === -1) {
+      parts.push(rest);
+      break;
+    }
+
+    if (start > 0) {
+      parts.push(rest.slice(0, start));
+      rest = rest.slice(start);
+    }
+
+    // remove starting **
+    rest = rest.slice(2);
+    const end = rest.indexOf("**");
+    if (end === -1) {
+      // no closing, push remainder
+      parts.push(`**${rest}`);
+      break;
+    }
+
+    const boldText = rest.slice(0, end);
+    parts.push({ bold: boldText });
+    rest = rest.slice(end + 2);
+  }
+
+  return (
+    <p className="whitespace-pre-wrap">
+      {parts.map((part, idx) =>
+        typeof part === 'string' ? (
+          <span key={idx}>{part}</span>
+        ) : (
+          <strong key={idx} className="font-semibold text-white">
+            {part.bold}
+          </strong>
+        ),
+      )}
+    </p>
   );
 }

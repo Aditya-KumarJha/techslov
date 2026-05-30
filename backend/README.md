@@ -20,6 +20,25 @@ Node.js + TypeScript backend scaffold for the social video RAG challenge.
 - Expose clean health and video metadata endpoints for the frontend.
 - Keep ingest job history and chat history queryable through read endpoints.
 
+## Transcript strategy (caption-first, zero-cost fallback)
+
+- Primary: fetch native subtitles/captions via `yt-dlp` (`requested_subtitles`, `subtitles`, `automatic_captions`).
+- Supported caption formats: `json3`, `srv3`, XML (`<text ...>`), and WebVTT.
+- Fallback (optional): local Whisper CLI for videos where captions are unavailable.
+
+### Local prerequisites
+
+- Install `yt-dlp` and ensure it is available in `PATH`.
+- Optional for fallback: install local Whisper CLI and model files.
+- For private Instagram content, provide a cookie file path in `INSTAGRAM_COOKIE_FILE`.
+
+### Environment variables for fallback
+
+- `LOCAL_WHISPER_FALLBACK` (default `false`): enable fallback transcription when no captions are found.
+- `WHISPER_COMMAND` (default `whisper`): command used to run Whisper CLI.
+- `WHISPER_MODEL` (default `base`): model name passed to Whisper CLI.
+- `WHISPER_LANGUAGE` (default `en`): language hint for transcription.
+
 ## Folder layout
 
 - `src/server.ts` - process bootstrap.

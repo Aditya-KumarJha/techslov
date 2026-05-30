@@ -26,7 +26,8 @@ export async function chatStreamController(request: ChatRequest, reply: FastifyR
 
     for await (const event of container.ragEngine.streamAnswer(payload.message, {
       conversationId: payload.conversationId,
-      videoIds: payload.videoIds
+      videoIds: payload.videoIds,
+      context: payload.videoContext
     })) {
       if (event.type === 'token') {
         writeSseEvent(reply, 'token', { token: event.token });

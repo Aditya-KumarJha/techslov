@@ -50,10 +50,49 @@ export type ChatMessage = {
   citations?: Citation[];
 };
 
+export type ConversationTurn = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+};
+
+export type ConversationSummary = {
+  conversationId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  turnCount: number;
+  preview: string;
+  activeContextIndex: number;
+  contextCount: number;
+};
+
+export type ConversationVideoContext = {
+  contextId: string;
+  createdAt: string;
+  videoA: SocialVideoMetadata;
+  videoB: SocialVideoMetadata;
+};
+
+export type ConversationThread = ConversationSummary & {
+  turns: ConversationTurn[];
+  contexts: ConversationVideoContext[];
+};
+
+export type ConversationTitleUpdate = {
+  title: string;
+};
+
+export type ConversationContextIndexUpdate = {
+  activeContextIndex: number;
+};
+
 export type ChatRequest = {
   conversationId?: string;
   message: string;
   videoIds?: VideoId[];
+  videoContext?: ConversationVideoContext;
 };
 
 export type ChatResponse = {

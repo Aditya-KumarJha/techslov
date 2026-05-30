@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS ingest_jobs (
 
 CREATE TABLE IF NOT EXISTS conversations (
   conversation_id text PRIMARY KEY,
+  title text NOT NULL DEFAULT '',
+  contexts jsonb NOT NULL DEFAULT '[]'::jsonb,
+  active_context_index integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );

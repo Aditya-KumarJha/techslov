@@ -76,10 +76,17 @@ export async function ensureDatabaseSchema(pool: Pool, options?: { pgvectorAvail
   await pool.query(`
     CREATE TABLE IF NOT EXISTS conversations (
       conversation_id text PRIMARY KEY,
+      title text NOT NULL DEFAULT '',
+      contexts jsonb NOT NULL DEFAULT '[]'::jsonb,
+      active_context_index integer NOT NULL DEFAULT 0,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS contexts jsonb NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS active_context_index integer NOT NULL DEFAULT 0`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS conversation_turns (

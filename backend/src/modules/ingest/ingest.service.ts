@@ -1,4 +1,4 @@
-import { chunkTranscript } from '../../lib/text/chunker.js';
+import { chunkTranscript, chunkTranscriptFromSegments } from '../../lib/text/chunker.js';
 import { getAppContainer } from '../../lib/runtime/app-container.js';
 import type { TranscriptSegment } from '../../lib/transcript/transcript.types.js';
 import type { SocialVideoMetadata } from '../../types/api.js';
@@ -33,11 +33,17 @@ async function ingestVideo(videoId: 'A' | 'B', sourceUrl: string): Promise<Inges
   const durationSeconds = Math.round(metadata.durationSeconds);
   const transcriptText = transcriptSegments.map((segment) => segment.text).join(' ').trim();
   const transcriptPreview = transcriptText.slice(0, 180);
-  const transcriptChunks = chunkTranscript({
-    videoId,
-    sourceUrl,
-    text: transcriptText
-  });
+  const transcriptChunks = transcriptSegments.length
+    ? chunkTranscriptFromSegments({
+      videoId,
+      sourceUrl,
+      segments: transcriptSegments
+    })
+    : chunkTranscript({
+      videoId,
+      sourceUrl,
+      text: transcriptText
+    });
   const embeddings = await container.embeddings.embedDocuments(transcriptChunks.map((chunk) => chunk.text));
   const enrichedChunks = transcriptChunks.map((chunk, index) => ({
     ...chunk,

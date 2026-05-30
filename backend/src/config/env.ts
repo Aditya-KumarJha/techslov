@@ -18,6 +18,10 @@ const envSchema = z.object({
   PGVECTOR_TABLE: z.string().default('video_chunks'),
   YOUTUBE_TRANSCRIPT_API_KEY: z.string().optional(),
   INSTAGRAM_COOKIE_FILE: z.string().optional(),
+  LOCAL_WHISPER_FALLBACK: z.coerce.boolean().default(false),
+  WHISPER_COMMAND: z.string().default('whisper'),
+  WHISPER_MODEL: z.string().default('base'),
+  WHISPER_LANGUAGE: z.string().default('en'),
   QDRANT_URL: z.string().optional(),
   QDRANT_API_KEY: z.string().optional()
 });

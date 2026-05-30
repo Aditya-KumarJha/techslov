@@ -1,6 +1,11 @@
 import type {
   ChatRequest,
   ChatResponse,
+  ConversationContextIndexUpdate,
+  ConversationSummary,
+  ConversationThread,
+  ConversationTitleUpdate,
+  ConversationVideoContext,
   IngestJob,
   SocialVideoMetadata,
   VideoId,
@@ -70,6 +75,60 @@ export async function fetchVideo(videoId: VideoId) {
 
     throw error;
   }
+}
+
+export async function listConversations() {
+  return requestJson<ConversationSummary[]>("/history/conversations");
+}
+
+export async function fetchConversation(conversationId: string) {
+  try {
+    return await requestJson<ConversationThread>(`/history/conversations/${conversationId}`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+export async function renameConversation(conversationId: string, title: string) {
+  return requestJson<{ conversationId: string; title: string }>(`/history/conversations/${conversationId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title } satisfies ConversationTitleUpdate),
+  });
+}
+
+export async function deleteConversation(conversationId: string) {
+  const response = await fetch(`${API_BASE_URL}/history/conversations/${conversationId}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok && response.status !== 204) {
+    const errorPayload = await response.text();
+    throw new Error(errorPayload || `Request failed with status ${response.status}`);
+  }
+}
+
+export async function addConversationContext(conversationId: string, context: ConversationVideoContext) {
+  return requestJson<ConversationVideoContext>(`/history/conversations/${conversationId}/contexts`, {
+    method: "POST",
+    body: JSON.stringify(context),
+  });
+}
+
+export async function setConversationContextIndex(conversationId: string, activeContextIndex: number) {
+  return requestJson<{ conversationId: string; activeContextIndex: number }>(
+    `/history/conversations/${conversationId}/context-index`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ activeContextIndex } satisfies ConversationContextIndexUpdate),
+    },
+  );
 }
 
 function readSseEventStream(text: string) {
