@@ -11,6 +11,7 @@ export type VideoSourceMetadata = {
   url: string;
   videoId: string;
   title: string;
+  description: string;
   creator: string;
   followerCount: number;
   views: number;

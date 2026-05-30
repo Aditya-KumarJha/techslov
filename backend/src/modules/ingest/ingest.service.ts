@@ -30,6 +30,7 @@ async function ingestVideo(videoId: 'A' | 'B', sourceUrl: string): Promise<Inges
   const container = getAppContainer();
   const metadata = await container.transcriptFetcher.fetchMetadata(sourceUrl);
   const transcriptSegments: TranscriptSegment[] = await container.transcriptFetcher.fetchTranscript(sourceUrl);
+  const durationSeconds = Math.round(metadata.durationSeconds);
   const transcriptText = transcriptSegments.map((segment) => segment.text).join(' ').trim();
   const transcriptPreview = transcriptText.slice(0, 180);
   const transcriptChunks = chunkTranscript({
@@ -56,14 +57,16 @@ async function ingestVideo(videoId: 'A' | 'B', sourceUrl: string): Promise<Inges
   const storedVideo: IngestedVideo = {
     videoId,
     sourceUrl,
+    title: metadata.title,
     creator: metadata.creator,
     followerCount: metadata.followerCount,
     views: metadata.views,
     likes: metadata.likes,
     comments: metadata.comments,
     hashtags: metadata.hashtags,
+    description: metadata.description,
     uploadDate: metadata.uploadDate,
-    durationSeconds: metadata.durationSeconds,
+    durationSeconds,
     engagementRate,
     transcriptChunkCount: transcriptChunks.length,
     transcriptPreview

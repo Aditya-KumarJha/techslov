@@ -5,7 +5,7 @@ import { JobHistoryStore } from '../state/job-history-store.js';
 import { VideoRegistry } from '../state/video-registry.js';
 import { createRagEngine } from '../rag/rag-engine.js';
 import { getDatabasePool } from '../db/pool.js';
-import { ensureDatabaseSchema } from '../db/schema.js';
+import { canUsePgvector, ensureDatabaseSchema } from '../db/schema.js';
 
 export type AppContainer = {
   embeddings: ReturnType<typeof createEmbeddingsProvider>;
@@ -26,10 +26,11 @@ export async function initializeAppContainer(): Promise<AppContainer> {
   }
 
   const pool = getDatabasePool();
-  await ensureDatabaseSchema(pool);
+  const pgvectorAvailable = await canUsePgvector(pool);
+  await ensureDatabaseSchema(pool, { pgvectorAvailable });
 
   const embeddings = createEmbeddingsProvider();
-  const vectorStore = createVectorStore();
+  const vectorStore = createVectorStore({ pgvectorAvailable });
   const transcriptFetcher = createTranscriptFetcher();
   const videoRegistry = new VideoRegistry(pool);
   const conversationStore = new ConversationStore(pool);

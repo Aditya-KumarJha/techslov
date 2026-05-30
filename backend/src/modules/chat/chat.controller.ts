@@ -18,22 +18,38 @@ export async function chatController(request: ChatRequest, reply: FastifyReply) 
 }
 
 export async function chatStreamController(request: ChatRequest, reply: FastifyReply) {
-  const payload = chatMessageSchema.parse(request.body);
-  const container = getAppContainer();
+  try {
+    const payload = chatMessageSchema.parse(request.body);
+    const container = getAppContainer();
 
-  startSseStream(reply);
+    startSseStream(reply);
 
-  for await (const event of container.ragEngine.streamAnswer(payload.message, {
-    conversationId: payload.conversationId,
-    videoIds: payload.videoIds
-  })) {
-    if (event.type === 'token') {
-      writeSseEvent(reply, 'token', { token: event.token });
-    } else {
-      writeSseEvent(reply, 'final', event.response);
+    for await (const event of container.ragEngine.streamAnswer(payload.message, {
+      conversationId: payload.conversationId,
+      videoIds: payload.videoIds
+    })) {
+      if (event.type === 'token') {
+        writeSseEvent(reply, 'token', { token: event.token });
+      } else {
+        writeSseEvent(reply, 'final', event.response);
+      }
     }
-  }
 
-  reply.raw.end();
-  return reply;
+    reply.raw.end();
+    return reply;
+  } catch (error) {
+    request.log.error({ err: error }, 'Chat stream failed');
+
+    if (reply.raw.headersSent) {
+      writeSseEvent(reply, 'error', {
+        message: error instanceof Error ? error.message : 'Chat stream failed'
+      });
+      reply.raw.end();
+      return reply;
+    }
+
+    return reply.code(500).send({
+      message: error instanceof Error ? error.message : 'Chat stream failed'
+    });
+  }
 }

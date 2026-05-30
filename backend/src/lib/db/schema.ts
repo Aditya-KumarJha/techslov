@@ -2,17 +2,32 @@ import type { Pool } from 'pg';
 
 import { env } from '../../config/env.js';
 
-export async function ensureDatabaseSchema(pool: Pool) {
+export async function canUsePgvector(pool: Pool) {
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+    return true;
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === '0A000') {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+export async function ensureDatabaseSchema(pool: Pool, options?: { pgvectorAvailable?: boolean }) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS videos (
       video_id text PRIMARY KEY,
       source_url text NOT NULL,
+      title text NOT NULL DEFAULT '',
       creator text NOT NULL,
       follower_count integer NOT NULL DEFAULT 0,
       views integer NOT NULL DEFAULT 0,
       likes integer NOT NULL DEFAULT 0,
       comments integer NOT NULL DEFAULT 0,
       hashtags jsonb NOT NULL DEFAULT '[]'::jsonb,
+      description text NOT NULL DEFAULT '',
       upload_date text NOT NULL DEFAULT '',
       duration_seconds integer NOT NULL DEFAULT 0,
       engagement_rate double precision NOT NULL DEFAULT 0,
@@ -24,11 +39,13 @@ export async function ensureDatabaseSchema(pool: Pool) {
     )
   `);
 
-  const useQdrant = Boolean(env.QDRANT_URL);
+  await pool.query(`ALTER TABLE videos ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE videos ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT ''`);
 
-  if (!useQdrant) {
-    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+  const useQdrant = env.VECTOR_STORE === 'qdrant' && Boolean(env.QDRANT_URL);
+  const usePgvector = !useQdrant && options?.pgvectorAvailable !== false;
 
+  if (usePgvector) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ${env.PGVECTOR_TABLE} (
         chunk_id text PRIMARY KEY,

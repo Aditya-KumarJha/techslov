@@ -39,6 +39,15 @@ function pickCaptionUrl(payload: any) {
   return tracks.find((track) => track?.url)?.url;
 }
 
+function extractHashtagsFromText(text: string) {
+  const matches = text.match(/#[\p{L}\p{N}_]+/gu) ?? [];
+  return [...new Set(matches.map((tag) => tag.replace(/^#/, '').trim()).filter(Boolean))];
+}
+
+function uniqueTags(values: Array<string | undefined>) {
+  return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
+}
+
 async function parseCaptionTracks(captionUrl: string): Promise<TranscriptSegment[]> {
   const response = await fetch(captionUrl);
   const body = await response.text();
@@ -69,13 +78,17 @@ export class YtDlpTranscriptFetcher {
 
     const platform = detectVideoPlatform(sourceUrl);
     const sourceId = deriveSourceId(sourceUrl);
-    const hashtags = Array.isArray(payload?.tags) ? payload.tags.slice(0, 10) : [];
+    const description = String(payload?.description ?? '');
+    const descriptionHashtags = extractHashtagsFromText(description);
+    const captionHashtags = uniqueTags(Array.isArray(payload?.tags) ? payload.tags : []);
+    const hashtags = uniqueTags([...captionHashtags, ...descriptionHashtags]).slice(0, 20);
 
     return {
       platform,
       url: sourceUrl,
       videoId: sourceId,
       title: String(payload?.title ?? sourceId),
+      description,
       creator: String(payload?.uploader ?? payload?.channel ?? 'Unknown creator'),
       followerCount: Number(payload?.channel_follower_count ?? 0),
       views: Number(payload?.view_count ?? 0),
