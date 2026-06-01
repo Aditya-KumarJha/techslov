@@ -6,9 +6,9 @@ async function hydrateConversationThreadEvidence() {
   return container;
 }
 
-export async function enrichConversationThread(conversationId: string) {
+export async function enrichConversationThread(conversationId: string, clerkUserId: string | null) {
   const container = await hydrateConversationThreadEvidence();
-  const thread = await container.conversationStore.getConversationThread(conversationId);
+  const thread = await container.conversationStore.getConversationThread(conversationId, clerkUserId);
 
   if (!thread) {
     return null;
@@ -61,26 +61,26 @@ export async function getJobHistory(jobId: string) {
   return getAppContainer().jobHistoryStore.get(jobId);
 }
 
-export async function listConversationHistory() {
-  return getAppContainer().conversationStore.listConversations();
+export async function listConversationHistory(clerkUserId: string | null) {
+  return getAppContainer().conversationStore.listConversations(clerkUserId);
 }
 
-export async function getConversationHistory(conversationId: string) {
-  return enrichConversationThread(conversationId);
+export async function getConversationHistory(conversationId: string, clerkUserId: string | null) {
+  return enrichConversationThread(conversationId, clerkUserId);
 }
 
-export async function renameConversation(conversationId: string, title: string) {
-  return getAppContainer().conversationStore.updateConversationTitle(conversationId, title);
+export async function renameConversation(conversationId: string, clerkUserId: string, title: string) {
+  return getAppContainer().conversationStore.updateConversationTitle(conversationId, clerkUserId, title);
 }
 
-export async function removeConversation(conversationId: string) {
-  return getAppContainer().conversationStore.deleteConversation(conversationId);
+export async function removeConversation(conversationId: string, clerkUserId: string) {
+  return getAppContainer().conversationStore.deleteConversation(conversationId, clerkUserId);
 }
 
-export async function setConversationContextIndex(conversationId: string, activeContextIndex: number) {
-  return getAppContainer().conversationStore.updateActiveContextIndex(conversationId, activeContextIndex);
+export async function setConversationContextIndex(conversationId: string, clerkUserId: string, activeContextIndex: number) {
+  return getAppContainer().conversationStore.updateActiveContextIndex(conversationId, clerkUserId, activeContextIndex);
 }
 
-export async function saveConversationContext(conversationId: string, context: ConversationVideoContext) {
-  return getAppContainer().conversationStore.upsertConversationContext(conversationId, context);
+export async function saveConversationContext(conversationId: string, clerkUserId: string, context: ConversationVideoContext) {
+  return getAppContainer().conversationStore.upsertConversationContext(conversationId, clerkUserId, context);
 }

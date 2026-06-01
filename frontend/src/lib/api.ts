@@ -14,6 +14,10 @@ import type {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5050/api/v1";
 
+type AuthOptions = {
+  token?: string | null;
+};
+
 type StreamHandlers = {
   onToken: (token: string) => void;
   onFinal: (response: ChatResponse) => void;
@@ -46,13 +50,18 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+function buildHeaders(init?: RequestInit, auth?: AuthOptions) {
+  return {
+    "Content-Type": "application/json",
+    ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+    ...(init?.headers ?? {}),
+  };
+}
+
+async function requestJson<T>(path: string, init?: RequestInit, auth?: AuthOptions): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers: buildHeaders(init, auth),
   });
 
   return parseJsonResponse<T>(response);
@@ -77,13 +86,13 @@ export async function fetchVideo(videoId: VideoId) {
   }
 }
 
-export async function listConversations() {
-  return requestJson<ConversationSummary[]>("/history/conversations");
+export async function listConversations(auth?: AuthOptions) {
+  return requestJson<ConversationSummary[]>("/history/conversations", undefined, auth);
 }
 
-export async function fetchConversation(conversationId: string) {
+export async function fetchConversation(conversationId: string, auth?: AuthOptions) {
   try {
-    return await requestJson<ConversationThread>(`/history/conversations/${conversationId}`);
+    return await requestJson<ConversationThread>(`/history/conversations/${conversationId}`, undefined, auth);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return null;
@@ -93,19 +102,17 @@ export async function fetchConversation(conversationId: string) {
   }
 }
 
-export async function renameConversation(conversationId: string, title: string) {
+export async function renameConversation(conversationId: string, title: string, auth?: AuthOptions) {
   return requestJson<{ conversationId: string; title: string }>(`/history/conversations/${conversationId}`, {
     method: "PATCH",
     body: JSON.stringify({ title } satisfies ConversationTitleUpdate),
-  });
+  }, auth);
 }
 
-export async function deleteConversation(conversationId: string) {
+export async function deleteConversation(conversationId: string, auth?: AuthOptions) {
   const response = await fetch(`${API_BASE_URL}/history/conversations/${conversationId}`, {
     method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: buildHeaders(undefined, auth),
   });
 
   if (!response.ok && response.status !== 204) {
@@ -114,20 +121,29 @@ export async function deleteConversation(conversationId: string) {
   }
 }
 
-export async function addConversationContext(conversationId: string, context: ConversationVideoContext) {
+export async function addConversationContext(
+  conversationId: string,
+  context: ConversationVideoContext,
+  auth?: AuthOptions,
+) {
   return requestJson<ConversationVideoContext>(`/history/conversations/${conversationId}/contexts`, {
     method: "POST",
     body: JSON.stringify(context),
-  });
+  }, auth);
 }
 
-export async function setConversationContextIndex(conversationId: string, activeContextIndex: number) {
+export async function setConversationContextIndex(
+  conversationId: string,
+  activeContextIndex: number,
+  auth?: AuthOptions,
+) {
   return requestJson<{ conversationId: string; activeContextIndex: number }>(
     `/history/conversations/${conversationId}/context-index`,
     {
       method: "PATCH",
       body: JSON.stringify({ activeContextIndex } satisfies ConversationContextIndexUpdate),
     },
+    auth,
   );
 }
 
@@ -151,11 +167,12 @@ function readSseEventStream(text: string) {
 export async function streamChatMessage(
   request: ChatRequest,
   handlers: StreamHandlers,
+  auth?: AuthOptions,
 ): Promise<ChatResponse | null> {
   const response = await fetch(`${API_BASE_URL}/chat/stream`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      ...buildHeaders(undefined, auth),
       Accept: "text/event-stream",
     },
     body: JSON.stringify(request),

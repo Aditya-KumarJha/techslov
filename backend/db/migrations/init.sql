@@ -1,6 +1,16 @@
 -- Initial database schema for social-rag backend.
 -- Qdrant is the active vector store when QDRANT_URL is configured, so this file only creates the shared app tables.
 
+CREATE TABLE IF NOT EXISTS app_users (
+  clerk_user_id text PRIMARY KEY,
+  email text,
+  first_name text,
+  last_name text,
+  image_url text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS videos (
   video_id text PRIMARY KEY,
   source_url text NOT NULL,
@@ -33,6 +43,7 @@ CREATE TABLE IF NOT EXISTS ingest_jobs (
 
 CREATE TABLE IF NOT EXISTS conversations (
   conversation_id text PRIMARY KEY,
+  clerk_user_id text REFERENCES app_users(clerk_user_id) ON DELETE CASCADE,
   title text NOT NULL DEFAULT '',
   contexts jsonb NOT NULL DEFAULT '[]'::jsonb,
   active_context_index integer NOT NULL DEFAULT 0,
@@ -49,6 +60,9 @@ CREATE TABLE IF NOT EXISTS conversation_turns (
   citations jsonb NOT NULL DEFAULT '[]'::jsonb,
   transcript_evidence jsonb NOT NULL DEFAULT '[]'::jsonb
 );
+
+CREATE INDEX IF NOT EXISTS conversations_clerk_user_id_idx
+  ON conversations (clerk_user_id, updated_at DESC);
 
 -- Vector store table (pgvector)
 -- If you choose pgvector instead of Qdrant, create the vector table via the app bootstrap or a pgvector-specific migration.

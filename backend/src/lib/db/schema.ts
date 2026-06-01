@@ -17,6 +17,18 @@ export async function canUsePgvector(pool: Pool) {
 
 export async function ensureDatabaseSchema(pool: Pool, options?: { pgvectorAvailable?: boolean }) {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_users (
+      clerk_user_id text PRIMARY KEY,
+      email text,
+      first_name text,
+      last_name text,
+      image_url text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS videos (
       video_id text PRIMARY KEY,
       source_url text NOT NULL,
@@ -76,6 +88,7 @@ export async function ensureDatabaseSchema(pool: Pool, options?: { pgvectorAvail
   await pool.query(`
     CREATE TABLE IF NOT EXISTS conversations (
       conversation_id text PRIMARY KEY,
+      clerk_user_id text REFERENCES app_users(clerk_user_id) ON DELETE CASCADE,
       title text NOT NULL DEFAULT '',
       contexts jsonb NOT NULL DEFAULT '[]'::jsonb,
       active_context_index integer NOT NULL DEFAULT 0,
@@ -84,9 +97,27 @@ export async function ensureDatabaseSchema(pool: Pool, options?: { pgvectorAvail
     )
   `);
 
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS clerk_user_id text`);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'conversations_clerk_user_id_fkey'
+      ) THEN
+        ALTER TABLE conversations
+        ADD CONSTRAINT conversations_clerk_user_id_fkey
+        FOREIGN KEY (clerk_user_id)
+        REFERENCES app_users(clerk_user_id)
+        ON DELETE CASCADE;
+      END IF;
+    END $$;
+  `);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS contexts jsonb NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS active_context_index integer NOT NULL DEFAULT 0`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS conversations_clerk_user_id_idx ON conversations (clerk_user_id, updated_at DESC)`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS conversation_turns (

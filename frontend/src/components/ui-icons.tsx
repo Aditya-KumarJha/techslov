@@ -92,3 +92,21 @@ export function ChevronRightIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function SearchIcon({ className }: IconProps) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className={className} fill="none">
+      <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M16 16l4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function CloseIcon({ className }: IconProps) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className={className} fill="none">
+      <path d="M6 6l12 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M18 6l-12 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}

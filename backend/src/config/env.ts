@@ -1,7 +1,13 @@
 import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
-dotenv.config();
+const currentFilePath = fileURLToPath(import.meta.url);
+const currentDir = path.dirname(currentFilePath);
+const backendEnvPath = path.resolve(currentDir, '../../.env');
+
+dotenv.config({ path: backendEnvPath });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -10,6 +16,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   FRONTEND_ORIGIN: z.string().default('http://localhost:5173'),
+  CLERK_SECRET_KEY: z.string().optional(),
+  CLERK_PUBLISHABLE_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-3.1-flash-lite'),
   GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-2'),

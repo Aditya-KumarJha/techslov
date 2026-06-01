@@ -111,6 +111,7 @@ export type ChatRequest = {
   message: string;
   videoIds?: VideoId[];
   videoContext?: ConversationVideoContext;
+  history?: Array<Pick<ConversationTurn, "role" | "content">>;
 };
 
 export type ChatResponse = {

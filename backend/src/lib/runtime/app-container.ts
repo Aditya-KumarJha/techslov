@@ -2,6 +2,7 @@ import { createEmbeddingsProvider, createTranscriptFetcher } from '../transcript
 import { createVectorStore } from '../vector-store/vector-store.factory.js';
 import { ConversationStore } from '../state/conversation-store.js';
 import { JobHistoryStore } from '../state/job-history-store.js';
+import { UserStore } from '../state/user-store.js';
 import { VideoRegistry } from '../state/video-registry.js';
 import { createRagEngine } from '../rag/rag-engine.js';
 import { getDatabasePool } from '../db/pool.js';
@@ -14,6 +15,7 @@ export type AppContainer = {
   videoRegistry: VideoRegistry;
   conversationStore: ConversationStore;
   jobHistoryStore: JobHistoryStore;
+  userStore: UserStore;
   ragEngine: ReturnType<typeof createRagEngine>;
   pool: ReturnType<typeof getDatabasePool>;
 };
@@ -35,6 +37,7 @@ export async function initializeAppContainer(): Promise<AppContainer> {
   const videoRegistry = new VideoRegistry(pool);
   const conversationStore = new ConversationStore(pool);
   const jobHistoryStore = new JobHistoryStore(pool);
+  const userStore = new UserStore(pool);
 
   await videoRegistry.hydrate();
 
@@ -52,6 +55,7 @@ export async function initializeAppContainer(): Promise<AppContainer> {
     videoRegistry,
     conversationStore,
     jobHistoryStore,
+    userStore,
     ragEngine,
     pool
   };

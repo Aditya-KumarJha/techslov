@@ -10,6 +10,7 @@ type ChatPanelProps = {
   conversationId: string | null;
   conversationTitle: string;
   input: string;
+  isAuthenticated: boolean;
   isStreaming: boolean;
   isLoadingHistory: boolean;
   messages: ChatMessage[];
@@ -30,6 +31,7 @@ export function ChatPanel({
   conversationId,
   conversationTitle,
   input,
+  isAuthenticated,
   isStreaming,
   isLoadingHistory,
   messages,
@@ -67,7 +69,11 @@ export function ChatPanel({
               {conversationTitle || "New chat"}
             </h2>
             <p className="mt-1 text-sm text-slate-400">
-              {conversationId ? "Loaded thread saved to your history." : "Ask about the two videos, then keep the thread moving."}
+              {conversationId
+                ? "Loaded thread saved to your private history."
+                : isAuthenticated
+                  ? "Ask about the two videos, then keep the thread moving."
+                  : "Guest chat is active."}
             </p>
           </div>
         </div>
@@ -93,7 +99,7 @@ export function ChatPanel({
       </div>
 
       <div className="mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 p-4">
-        <div ref={messagesContainerRef as any} className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
+        <div ref={messagesContainerRef} className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
             {isLoadingHistory ? (
             <div className="grid gap-2 rounded-2xl border border-dashed border-white/10 bg-white/5 p-6 text-sm leading-6 text-slate-400">
               <span className="text-white">Loading conversation…</span>
@@ -174,7 +180,11 @@ export function ChatPanel({
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs leading-5 text-slate-500">
               <SparkIcon className="h-4 w-4 text-white" />
-              <span>Conversation memory stays attached to the thread.</span>
+              <span>
+                {isAuthenticated
+                  ? "Conversation memory stays attached to your signed-in thread."
+                  : "Conversation memory stays only in this tab while you remain in guest mode."}
+              </span>
             </div>
 
             <button

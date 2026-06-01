@@ -13,9 +13,21 @@ import {
 import { z } from 'zod';
 
 import type { ConversationVideoContext, UpdateConversationContextIndexRequest, UpdateConversationTitleRequest } from '../../types/api.js';
+import { getRequestUserId } from '../../lib/auth/auth.js';
 
-export async function listConversationsController(_request: FastifyRequest, reply: FastifyReply) {
-  const conversations = await listConversationHistory();
+function requireUserId(request: FastifyRequest, reply: FastifyReply) {
+  const clerkUserId = getRequestUserId(request);
+
+  if (!clerkUserId) {
+    void reply.code(401).send({ message: 'Authentication required' });
+    return null;
+  }
+
+  return clerkUserId;
+}
+
+export async function listConversationsController(request: FastifyRequest, reply: FastifyReply) {
+  const conversations = await listConversationHistory(getRequestUserId(request));
   return reply.send({ data: conversations });
 }
 
@@ -41,7 +53,7 @@ export async function getConversationController(
   request: FastifyRequest<{ Params: { conversationId: string } }>,
   reply: FastifyReply
 ) {
-  const conversation = await getConversationHistory(request.params.conversationId);
+  const conversation = await getConversationHistory(request.params.conversationId, getRequestUserId(request));
 
   if (!conversation) {
     return reply.code(404).send({ message: 'Conversation history not found' });
@@ -69,8 +81,18 @@ export async function updateConversationTitleController(
   request: FastifyRequest<{ Params: { conversationId: string }; Body: UpdateConversationTitleRequest }>,
   reply: FastifyReply
 ) {
+  const clerkUserId = requireUserId(request, reply);
+
+  if (!clerkUserId) {
+    return reply;
+  }
+
   const payload = updateConversationTitleSchema.parse(request.body);
-  const title = await renameConversation(request.params.conversationId, payload.title);
+  const title = await renameConversation(request.params.conversationId, clerkUserId, payload.title);
+
+  if (!title) {
+    return reply.code(404).send({ message: 'Conversation history not found' });
+  }
 
   return reply.send({ data: { conversationId: request.params.conversationId, title } });
 }
@@ -79,7 +101,18 @@ export async function deleteConversationController(
   request: FastifyRequest<{ Params: { conversationId: string } }>,
   reply: FastifyReply
 ) {
-  await removeConversation(request.params.conversationId);
+  const clerkUserId = requireUserId(request, reply);
+
+  if (!clerkUserId) {
+    return reply;
+  }
+
+  const deleted = await removeConversation(request.params.conversationId, clerkUserId);
+
+  if (!deleted) {
+    return reply.code(404).send({ message: 'Conversation history not found' });
+  }
+
   return reply.code(204).send();
 }
 
@@ -87,8 +120,19 @@ export async function updateConversationContextIndexController(
   request: FastifyRequest<{ Params: { conversationId: string }; Body: UpdateConversationContextIndexRequest }>,
   reply: FastifyReply
 ) {
+  const clerkUserId = requireUserId(request, reply);
+
+  if (!clerkUserId) {
+    return reply;
+  }
+
   const payload = updateConversationContextIndexSchema.parse(request.body);
-  await setConversationContextIndex(request.params.conversationId, payload.activeContextIndex);
+  const updated = await setConversationContextIndex(request.params.conversationId, clerkUserId, payload.activeContextIndex);
+
+  if (!updated) {
+    return reply.code(404).send({ message: 'Conversation history not found' });
+  }
+
   return reply.send({ data: { conversationId: request.params.conversationId, activeContextIndex: payload.activeContextIndex } });
 }
 
@@ -96,7 +140,13 @@ export async function addConversationContextController(
   request: FastifyRequest<{ Params: { conversationId: string }; Body: ConversationVideoContext }>,
   reply: FastifyReply
 ) {
+  const clerkUserId = requireUserId(request, reply);
+
+  if (!clerkUserId) {
+    return reply;
+  }
+
   const payload = conversationVideoContextSchema.parse(request.body) as ConversationVideoContext;
-  await saveConversationContext(request.params.conversationId, payload);
+  await saveConversationContext(request.params.conversationId, clerkUserId, payload);
   return reply.code(201).send({ data: payload });
 }
