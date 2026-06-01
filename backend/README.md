@@ -169,7 +169,13 @@ When deploying this service on **Render**, configure a **Web Service** with:
 * **Build Command:** `npm install --include=dev && npm run build` (This tells NPM to temporarily include `devDependencies` during `npm install` even when Render runs in production mode. This makes typescript and type packages like `@types/pg` available to successfully build the project in the `dist/` directory, after which they are pruned automatically for a lightweight container).
 * **Start Command:** `npm run start` (Which fires `node dist/server.js` using native optimized Node).
 
-### 2. Environment Configurations
+### 2. Automated `yt-dlp` Static Binary Provisioning
+* **How it works:** Cloud host environments (like Render's standard Node runtime) do not have the Python-based `yt-dlp` tool pre-installed in the OS.
+* **Our Solution:** We integrated an automated curl download directly into the backend `npm run build` script. It automatically pulls the latest `yt-dlp` release binary, places it inside `./bin/yt-dlp`, and grants execution permissions (`chmod a+rx`).
+* **Auto-Detection:** The backend's metadata and transcript extraction engine ([yt-dlp-transcript-fetcher.ts](src/lib/transcript/yt-dlp-transcript-fetcher.ts)) dynamically checks for a local `./bin/yt-dlp` executable before falling back to system binaries. This makes video ingestion work completely **out-of-the-box** without needing custom Dockerfiles or system packages!
+* **Ignored in Git:** Both local and global `bin/` directories are ignored in `.gitignore` to prevent committing platform-specific binaries into your repository.
+
+### 3. Environment Configurations
 * Set `NODE_ENV=production` inside Render Environment variables.
 * Set `FRONTEND_ORIGIN` to your production Vercel URL (e.g. `https://creatorlens.vercel.app`).
 * Provide Clerk Credentials, Database Connection Strings, and LLM API keys.

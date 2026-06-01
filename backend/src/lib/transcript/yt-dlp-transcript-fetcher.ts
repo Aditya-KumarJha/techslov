@@ -1,15 +1,27 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, parse } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join, parse, resolve } from 'node:path';
 
 import { env } from '../../config/env.js';
 import type { TranscriptSegment, VideoSourceMetadata } from './transcript.types.js';
 import { detectVideoPlatform, deriveSourceId } from './video-source.js';
 
+function getCommandPath(command: string) {
+  if (command === 'yt-dlp') {
+    const localPath = resolve(process.cwd(), 'bin/yt-dlp');
+    if (existsSync(localPath)) {
+      return localPath;
+    }
+  }
+  return command;
+}
+
 function execFile(command: string, args: string[]) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const childProcess = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  return new Promise<{ stdout: string; stderr: string }>((resolvePromise, reject) => {
+    const resolvedCommand = getCommandPath(command);
+    const childProcess = spawn(resolvedCommand, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
 
@@ -24,7 +36,7 @@ function execFile(command: string, args: string[]) {
     childProcess.on('error', reject);
     childProcess.on('close', (code) => {
       if (code === 0) {
-        resolve({ stdout, stderr });
+        resolvePromise({ stdout, stderr });
         return;
       }
 

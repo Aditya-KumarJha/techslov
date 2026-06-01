@@ -12,6 +12,7 @@
 node_modules/
 dist/
 build/
+bin/
 .next/
 out/
 tsconfig.tsbuildinfo
