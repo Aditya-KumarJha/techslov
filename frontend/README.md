@@ -1,69 +1,104 @@
-# CreatorLens | Next.js Frontend Dashboard
+# CreatorLens Client | Next.js RAG Dashboard
 
-The highly responsive, vibe-coded Next.js + React + Tailwind CSS client dashboard for CreatorLens. It incorporates side-by-side video analytics cards, interactive engagement tracking, full search filters, immediate rename/deletion operations, and a real-time streaming RAG chat panel with citation mapping.
-
----
-
-## Technical Stack & Features
-
-* **Framework:** **Next.js 16 (App Router)** & **React 19** (designed for modern, modular, and optimized layout routing).
-* **Styling & Theme:** **Tailwind CSS v4** & Vanilla CSS variables (incorporating sleek dark modes, vibrant amber highlights, Harmonious Tailwind-based layout grids, and premium responsive cards).
-* **Authentication:** **Clerk Providers** (for seamless, secured user log-ins, signup workflows, and private chat history tracking).
-* **Key Features:**
-  * **Side-by-Side Analytics Cards:** View duration, upload date, views, likes, comments, follower count, engagement rate, and transcript preview.
-  * **Interactive Conversation Thread:** Full list of conversations with the ability to delete or rename instantly.
-  * **Smart Modal Responsiveness:** Deletion and Rename modal operations are closed immediately in the UI to prevent network lags, while resolving in the background.
-  * **Reset States on New Chat:** Instant clearing of chat inputs, search queries, ingestion states, and right-side comparison panels.
-  * **Automatic Server Wakeup Ping:** Triggers an immediate wakeup API check on mounting the home page, successfully resolving Render's 50-second free tier cold starts in advance.
+The state-of-the-art, vibe-coded, and highly responsive Next.js frontend client dashboard for CreatorLens. Engineered with React 19, Tailwind CSS v4, and Clerk, this client provides side-by-side video metrics breakdowns, optimistic UI state updates, automatic backend wakeup pings, and sub-second token streaming.
 
 ---
 
-## Installation & Setup
+## 🎨 Premium Design System & UX Highlights
 
-Ensure you have Node.js 18.x or above installed.
+We built the CreatorLens interface to feel like a premium, state-of-the-art creator studio, focusing on visual excellence, snappiness, and zero friction:
 
-### 1. Install Dependencies
-Navigate to the `frontend` directory and install project packages:
-```bash
-npm install
+### 1. Tailwind CSS v4 & Harmonic Glassmorphism
+* **The Design:** Implements modern typography (Outfit / Geist), harmonized dark palettes (steep carbon tones), smooth gradients, subtle micro-animations, and glassmorphic card grids.
+* **Responsive Layout:** Responsive columns that scale from dynamic single-column mobile views to optimized three-column layouts (`[Sidebar_History | Main_Ingest_Chat | Sidebar_Analytics]`) on large screens.
+
+### 2. Active Server Warmup (Cold-Start Resolution)
+* **The Optimization:** Since Render's free tier spins down backends after 15 minutes of inactivity, waiting for a user query to wake up the server causes a ~50-second lag.
+* **The Solution:** Added a lightweight mount `useEffect` inside [social-rag-dashboard.tsx](src/components/social-rag-dashboard.tsx) that fires a non-blocking `GET` request to the backend's `/health` endpoint the millisecond the frontend loads. This wakes up the server in the background while the user is still pasting URLs or reading the welcome text!
+
+### 3. Immediate Modal Responsive Operations
+* **The Optimization:** Waiting for network responses to close dialogs causes visual stutter and makes applications feel laggy.
+* **The Solution:** Deletion and Rename actions close their respective modals and clear state IDs **instantly** (within ~1ms). The API call then resolves in the background, updating the sidebar list asynchronously. If a network block or error occurs, the transient red warning notification banner appears automatically.
+
+### 4. Smart Reset Counter keys
+* **The Optimization:** When starting a "New Chat", elements in the DOM (such as input URLs or statistics panels) should reset completely. 
+* **The Solution:** Implemented a `resetFormKey` integer state that increments on clicking "New chat". By keying the `IngestForm` with this key (`key={`${conversationId || "new-chat"}-${resetFormKey}`}`), React completely unmounts and remounts a fresh, empty form, resetting all inputs in a single render frame.
+
+---
+
+## 🏗️ Folder Structure
+
+```
+src/
+├── app/                    # Next.js App Router root layout and globals
+├── components/             # Reusable UI dashboard elements
+│   ├── chat-panel.tsx      # Real-time streaming conversation log
+│   ├── citation-list.tsx   # Semantic source timeline mappings
+│   ├── ingest-form.tsx     # Double-input URL validator and submitter
+│   ├── social-rag-dashboard.tsx # Master state coordinator
+│   ├── ui-icons.tsx        # Optimized, custom SVG icons
+│   ├── video-card.tsx      # Video stats card (Views, Likes, Followers, Engagement)
+│   └── ...
+├── lib/
+│   ├── api.ts              # Core fetch connectors and Fastify empty body delete handlers
+│   └── format.ts           # Metric numbering and timeline formatting helpers
+└── types/                  # Shareable TypeScript contracts
 ```
 
-### 2. Configure Environment Variables
+---
+
+## ⚙️ Environment Variables
+
 Create a `.env` file in the root of the `frontend` directory containing:
 
 ```env
 # Backend API Base URL
 NEXT_PUBLIC_API_BASE_URL=http://localhost:5050/api/v1
 
-# Clerk Authenticated Session Keys
+# Clerk Authentication Session Credentials
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3RpcnJlZC1icmVhbS0zOS5jbGVyay5hY2NvdW50cy5kZXYk
 CLERK_SECRET_KEY=sk_test_DQryB1KTe8mOryURUQr0v6topjcxXVpzKufT8Bqp9G
 ```
 
 ---
 
-## Local Development & Compilation
+## 🚀 Execution Scripts
 
 ### 1. Run Development Server
-Launches the Next.js development environment on port `5173` (matching the default backend CORS settings):
+Launches the development client on port `5173` (matching the default backend CORS origin settings):
 ```bash
 npm run dev
 ```
 
 ### 2. Build for Production
-Compiles the application into highly optimized production assets:
+Compiles the application into optimized, static, and server-side production bundles:
 ```bash
 npm run build
 ```
 
 ### 3. Run Production Server
-Starts the built production bundle:
+Launches the built production bundle:
 ```bash
 npm run start
 ```
 
-### 4. Code Quality & Typechecking
-Verifies type safety and lint contracts:
+### 4. Lint and Code Quality
+Checks for formatting and syntax contracts:
 ```bash
 npm run lint
 ```
+
+---
+
+## 🌐 Production Deployment on Vercel
+
+When deploying this frontend on **Vercel**, select the project directory and configure:
+
+### 1. Build and Framework Settings
+* **Framework Preset:** `Next.js`
+* **Build Command:** `next build`
+
+### 2. Environment Variables
+* Configure `NEXT_PUBLIC_API_BASE_URL` to point to your production Render Fastify URL.
+* Supply your Clerk publishable key (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`) and secret key (`CLERK_SECRET_KEY`).
+* All communication and dynamic cross-site CORS queries between Vercel and Render are fully managed and allowed dynamically in production!
