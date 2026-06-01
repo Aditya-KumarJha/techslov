@@ -1,4 +1,8 @@
 import 'dotenv/config';
+import path from 'node:path';
+
+// Prepend ./bin to PATH so yt-dlp and other child processes can discover ffmpeg and local binaries
+process.env.PATH = `${process.env.PATH}:${path.resolve(process.cwd(), 'bin')}`;
 
 import { createApp } from './app.js';
 import { env } from './config/env.js';

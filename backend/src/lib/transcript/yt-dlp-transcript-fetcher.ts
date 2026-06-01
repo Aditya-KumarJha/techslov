@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join, parse, resolve } from 'node:path';
 
 import { env } from '../../config/env.js';
@@ -247,23 +247,105 @@ async function parseCaptionTracks(captionTrack: CaptionTrack): Promise<Transcrip
 
   return [];
 }
-
 export class YtDlpTranscriptFetcher {
+  private getCookiesArg(sourceUrl: string): string[] {
+    const isInstagram = sourceUrl.includes('instagram.com');
+
+    if (isInstagram && env.INSTAGRAM_COOKIE_FILE) {
+      return ['--cookies', env.INSTAGRAM_COOKIE_FILE];
+    }
+
+    if (env.YOUTUBE_COOKIES_CONTENT) {
+      try {
+        const tempPath = '/tmp/youtube-cookies.txt';
+        writeFileSync(tempPath, env.YOUTUBE_COOKIES_CONTENT, 'utf8');
+        return ['--cookies', tempPath];
+      } catch (err) {
+        console.warn("Failed to write YOUTUBE_COOKIES_CONTENT to /tmp/youtube-cookies.txt:", err);
+      }
+    }
+
+    if (env.YOUTUBE_COOKIES_FILE) {
+      return ['--cookies', env.YOUTUBE_COOKIES_FILE];
+    }
+
+    return [];
+  }
+
   private async fetchYtDlpPayload(sourceUrl: string) {
-    const output = await execFile('yt-dlp', ['--dump-single-json', '--skip-download', '--no-playlist', sourceUrl]);
+    const cookiesArg = this.getCookiesArg(sourceUrl);
+    const output = await execFile('yt-dlp', [
+      '--dump-single-json',
+      '--skip-download',
+      '--no-playlist',
+      ...cookiesArg,
+      sourceUrl
+    ]);
     return JSON.parse(output.stdout);
   }
 
+  private async fetchTranscriptWithGroqWhisper(audioFilePath: string): Promise<TranscriptSegment[]> {
+    if (!env.GROQ_API_KEY) {
+      console.warn("GROQ_API_KEY is not defined. Skipping Groq Whisper transcription.");
+      return [];
+    }
+
+    try {
+      const { readFileSync } = await import('node:fs');
+      const audioBuffer = readFileSync(audioFilePath);
+
+      const boundary = `----NodeFormBoundary${Math.random().toString(36).slice(2)}`;
+      const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.mp3"\r\nContent-Type: audio/mpeg\r\n\r\n`;
+      const footer = `\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-large-v3-turbo\r\n--${boundary}\r\nContent-Disposition: form-data; name="response_format"\r\n\r\nverbose_json\r\n--${boundary}--\r\n`;
+
+      const body = Buffer.concat([
+        Buffer.from(header, 'utf8'),
+        audioBuffer,
+        Buffer.from(footer, 'utf8')
+      ]);
+
+      const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.GROQ_API_KEY}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`
+        },
+        body
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Groq API returned status ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json() as any;
+      const segments = Array.isArray(result?.segments) ? result.segments : [];
+
+      return segments
+        .map((segment: any) => ({
+          text: String(segment?.text ?? '').replace(/\s+/g, ' ').trim(),
+          startTimeSeconds: Number(segment?.start ?? 0),
+          endTimeSeconds: Number(segment?.end ?? 0)
+        }))
+        .filter((segment: TranscriptSegment) => segment.text.length > 0);
+    } catch (err) {
+      console.error("Groq Whisper transcription failed:", err);
+      return [];
+    }
+  }
+
   private async fetchTranscriptWithWhisper(sourceUrl: string): Promise<TranscriptSegment[]> {
-    if (!env.LOCAL_WHISPER_FALLBACK) {
+    if (!env.LOCAL_WHISPER_FALLBACK && !env.GROQ_API_KEY) {
       return [];
     }
 
     const workingDirectory = await mkdtemp(join(tmpdir(), 'social-rag-whisper-'));
 
     try {
+      const cookiesArg = this.getCookiesArg(sourceUrl);
       await execFile('yt-dlp', [
         '--no-playlist',
+        ...cookiesArg,
         '-x',
         '--audio-format',
         'mp3',
@@ -280,29 +362,43 @@ export class YtDlpTranscriptFetcher {
 
       const audioFilePath = join(workingDirectory, audioFileName);
 
-      await execFile(env.WHISPER_COMMAND, [
-        audioFilePath,
-        '--model',
-        env.WHISPER_MODEL,
-        '--output_format',
-        'json',
-        '--output_dir',
-        workingDirectory,
-        ...(env.WHISPER_LANGUAGE ? ['--language', env.WHISPER_LANGUAGE] : [])
-      ]);
+      // 1. Try Groq Whisper API first if key is available (fast and cloud-safe)
+      if (env.GROQ_API_KEY) {
+        const groqSegments = await this.fetchTranscriptWithGroqWhisper(audioFilePath);
+        if (groqSegments.length) {
+          return groqSegments;
+        }
+      }
 
-      const transcriptJsonPath = join(workingDirectory, `${parse(audioFileName).name}.json`);
-      const whisperResult = JSON.parse(await readFile(transcriptJsonPath, 'utf8'));
-      const segments = Array.isArray(whisperResult?.segments) ? whisperResult.segments : [];
+      // 2. Otherwise fall back to local Whisper CLI if enabled
+      if (env.LOCAL_WHISPER_FALLBACK) {
+        await execFile(env.WHISPER_COMMAND, [
+          audioFilePath,
+          '--model',
+          env.WHISPER_MODEL,
+          '--output_format',
+          'json',
+          '--output_dir',
+          workingDirectory,
+          ...(env.WHISPER_LANGUAGE ? ['--language', env.WHISPER_LANGUAGE] : [])
+        ]);
 
-      return segments
-        .map((segment: any) => ({
-          text: String(segment?.text ?? '').replace(/\s+/g, ' ').trim(),
-          startTimeSeconds: Number(segment?.start ?? 0),
-          endTimeSeconds: Number(segment?.end ?? 0)
-        }))
-        .filter((segment: TranscriptSegment) => segment.text.length > 0);
-    } catch {
+        const transcriptJsonPath = join(workingDirectory, `${parse(audioFileName).name}.json`);
+        const whisperResult = JSON.parse(await readFile(transcriptJsonPath, 'utf8'));
+        const segments = Array.isArray(whisperResult?.segments) ? whisperResult.segments : [];
+
+        return segments
+          .map((segment: any) => ({
+            text: String(segment?.text ?? '').replace(/\s+/g, ' ').trim(),
+            startTimeSeconds: Number(segment?.start ?? 0),
+            endTimeSeconds: Number(segment?.end ?? 0)
+          }))
+          .filter((segment: TranscriptSegment) => segment.text.length > 0);
+      }
+
+      return [];
+    } catch (err) {
+      console.error("Transcription fallback failed:", err);
       return [];
     } finally {
       await rm(workingDirectory, { recursive: true, force: true });

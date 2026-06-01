@@ -27,6 +27,8 @@ const envSchema = z.object({
   PGVECTOR_TABLE: z.string().default('video_chunks'),
   YOUTUBE_TRANSCRIPT_API_KEY: z.string().optional(),
   INSTAGRAM_COOKIE_FILE: z.string().optional(),
+  YOUTUBE_COOKIES_FILE: z.string().optional(),
+  YOUTUBE_COOKIES_CONTENT: z.string().optional(),
   LOCAL_WHISPER_FALLBACK: z.coerce.boolean().default(false),
   WHISPER_COMMAND: z.string().default('whisper'),
   WHISPER_MODEL: z.string().default('base'),

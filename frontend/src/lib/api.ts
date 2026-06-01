@@ -51,10 +51,9 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 }
 
 function buildHeaders(init?: RequestInit, auth?: AuthOptions) {
-  const hasBody = Boolean(init?.body);
   const isDelete = init?.method === "DELETE";
   return {
-    ...(!hasBody || isDelete ? {} : { "Content-Type": "application/json" }),
+    ...(isDelete ? {} : { "Content-Type": "application/json" }),
     ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
     ...(init?.headers ?? {}),
   };
