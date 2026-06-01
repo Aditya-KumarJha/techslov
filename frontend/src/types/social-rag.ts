@@ -18,11 +18,26 @@ export type SocialVideoMetadata = {
   transcriptChunkCount?: number;
 };
 
+export type TranscriptEvidence = {
+  videoId: VideoId;
+  chunkId: string;
+  text: string;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  sourceUrl: string;
+  score?: number;
+  metadata?: Record<string, unknown>;
+};
+
 export type Citation = {
   videoId: VideoId;
   chunkId: string;
+  text: string;
   startTimeSeconds: number;
   endTimeSeconds: number;
+  sourceUrl: string;
+  score?: number;
+  metadata?: Record<string, unknown>;
 };
 
 export type RetrievedChunk = {
@@ -48,6 +63,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  transcriptEvidence?: TranscriptEvidence[];
 };
 
 export type ConversationTurn = {
@@ -55,6 +71,8 @@ export type ConversationTurn = {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  citations?: Citation[];
+  transcriptEvidence?: TranscriptEvidence[];
 };
 
 export type ConversationSummary = {
@@ -99,5 +117,6 @@ export type ChatResponse = {
   conversationId: string;
   answer: string;
   citations: Citation[];
+  transcriptEvidence: TranscriptEvidence[];
   retrievedChunks: RetrievedChunk[];
 };

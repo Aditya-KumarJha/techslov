@@ -17,11 +17,26 @@ export type SocialVideoMetadata = {
   transcriptChunkCount?: number;
 };
 
+export type TranscriptEvidence = {
+  videoId: VideoId;
+  chunkId: string;
+  text: string;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  sourceUrl: string;
+  score?: number;
+  metadata?: Record<string, unknown>;
+};
+
 export type Citation = {
   videoId: VideoId;
   chunkId: string;
+  text: string;
   startTimeSeconds: number;
   endTimeSeconds: number;
+  sourceUrl: string;
+  score?: number;
+  metadata?: Record<string, unknown>;
 };
 
 export type ConversationTurn = {
@@ -29,6 +44,8 @@ export type ConversationTurn = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  citations?: Citation[];
+  transcriptEvidence?: TranscriptEvidence[];
 };
 
 export type ConversationSummary = {

@@ -1,7 +1,7 @@
 import { env } from '../../config/env.js';
 import type { EmbeddedTranscriptChunk } from './memory-vector-store.js';
-import type { TranscriptChunk } from '../transcript/transcript-fetcher.js';
 import type { VectorStoreAdapter } from './vector-store.js';
+import type { TranscriptEvidenceChunk } from './vector-store.js';
 
 function authHeaders() {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -116,7 +116,7 @@ export class QdrantVectorStore implements VectorStoreAdapter {
     const hits = json.result ?? json.points ?? [];
 
     // normalize to TranscriptChunk shape
-    const mapped: Array<TranscriptChunk & { score: number; embedding: number[]; metadata: Record<string, unknown> }> = hits.map((h: any) => {
+    const mapped: TranscriptEvidenceChunk[] = hits.map((h: any) => {
       const payload = h.payload ?? h.point?.payload ?? {};
       const vector = h.vector ?? h.point?.vector ?? [];
       const score = typeof h.score === 'number' ? h.score : 1 - (h.dist ?? 0);
@@ -134,6 +134,58 @@ export class QdrantVectorStore implements VectorStoreAdapter {
     });
 
     return mapped;
+  }
+
+  async listByVideoId(videoId: 'A' | 'B'): Promise<TranscriptEvidenceChunk[]> {
+    await this.ensureCollection();
+
+    const url = `${this.baseUrl}/collections/${encodeURIComponent(this.collection)}/points/scroll`;
+    const chunks: TranscriptEvidenceChunk[] = [];
+    let nextOffset: string | number | null = null;
+
+    do {
+      const body: Record<string, unknown> = {
+        limit: 100,
+        with_payload: true,
+        with_vector: false,
+        offset: nextOffset ?? undefined,
+        filter: { must: [{ key: 'videoId', match: { value: videoId } }] }
+      };
+
+      const res: Response = await fetch(url, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Qdrant scroll failed: ${res.status} ${text}`);
+      }
+
+      const json: any = await res.json();
+      const hits = json.result?.points ?? json.result ?? [];
+
+      for (const hit of hits) {
+        const payload = hit.payload ?? hit.point?.payload ?? {};
+
+        chunks.push({
+          chunkId: String(hit.id ?? hit.point?.id),
+          text: payload.text ?? payload.content ?? '',
+          startTimeSeconds: payload.startTimeSeconds ?? 0,
+          endTimeSeconds: payload.endTimeSeconds ?? 0,
+          videoId: payload.videoId as 'A' | 'B',
+          sourceUrl: payload.sourceUrl ?? '',
+          metadata: payload.metadata ?? {}
+        });
+      }
+
+      nextOffset = json.result?.next_page_offset ?? null;
+    } while (nextOffset != null);
+
+    return chunks
+      .filter((chunk) => chunk.text.length > 0)
+      .sort((left, right) => left.startTimeSeconds - right.startTimeSeconds);
   }
 }
 

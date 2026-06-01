@@ -5,7 +5,7 @@ import { GeminiLlm } from '../llm/gemini-llm.js';
 import type { ConversationStore } from '../state/conversation-store.js';
 import type { VideoRegistry } from '../state/video-registry.js';
 import type { VectorStoreAdapter } from '../vector-store/vector-store.js';
-import type { Citation, ConversationVideoContext, VideoId } from '../../types/api.js';
+import type { Citation, ConversationVideoContext, TranscriptEvidence, VideoId } from '../../types/api.js';
 
 type RetrievedChunk = {
   videoId: VideoId;
@@ -18,12 +18,19 @@ type RetrievedChunk = {
   metadata: Record<string, unknown>;
 };
 
+type EvidenceInspection = {
+  retrievedChunks: RetrievedChunk[];
+  transcriptEvidence: TranscriptEvidence[];
+  citations: Citation[];
+};
+
 type RagState = {
   conversationId: string;
   question: string;
   videoIds: VideoId[];
   context: ConversationVideoContext | null;
   retrievedChunks: RetrievedChunk[];
+  transcriptEvidence: TranscriptEvidence[];
   answer: string;
   citations: Citation[];
 };
@@ -41,6 +48,7 @@ const RagAnnotation = Annotation.Root({
   videoIds: Annotation<VideoId[]>(),
   context: Annotation<ConversationVideoContext | null>(),
   retrievedChunks: Annotation<RetrievedChunk[]>(),
+  transcriptEvidence: Annotation<TranscriptEvidence[]>(),
   answer: Annotation<string>(),
   citations: Annotation<Citation[]>()
 });
@@ -49,9 +57,101 @@ function formatCitations(chunks: RetrievedChunk[]): Citation[] {
   return chunks.map((chunk) => ({
     videoId: chunk.videoId,
     chunkId: chunk.chunkId,
+    text: chunk.text,
     startTimeSeconds: chunk.startTimeSeconds,
-    endTimeSeconds: chunk.endTimeSeconds
+    endTimeSeconds: chunk.endTimeSeconds,
+    sourceUrl: chunk.sourceUrl,
+    score: chunk.score,
+    metadata: chunk.metadata
   }));
+}
+
+async function collectTranscriptEvidence(videoIds: VideoId[], vectorStore: VectorStoreAdapter) {
+  const chunks = await Promise.all(videoIds.map(async (videoId) => vectorStore.listByVideoId(videoId)));
+
+  return chunks
+    .flat()
+    .sort((left, right) => {
+      if (left.videoId !== right.videoId) {
+        return left.videoId.localeCompare(right.videoId);
+      }
+
+      return left.startTimeSeconds - right.startTimeSeconds;
+    })
+    .map((chunk) => ({
+      videoId: chunk.videoId,
+      chunkId: chunk.chunkId,
+      text: chunk.text,
+      startTimeSeconds: chunk.startTimeSeconds,
+      endTimeSeconds: chunk.endTimeSeconds,
+      sourceUrl: chunk.sourceUrl,
+      score: chunk.score,
+      metadata: chunk.metadata
+    }));
+}
+
+async function inspectQuestionEvidence(
+  question: string,
+  dependencies: RagDependencies,
+  input?: Partial<Pick<RagState, 'videoIds' | 'context'>>
+): Promise<EvidenceInspection> {
+  const videoIds = input?.videoIds ?? ['A', 'B'];
+  const resolvedContext = input?.context ?? null;
+  const queryEmbedding = await dependencies.embeddings.embedQuery(question);
+  const firstFiveQuestion = isFirstFiveSecondsQuestion(question);
+  const relevantChunks = await dependencies.vectorStore.search(queryEmbedding, {
+    videoId: videoIds.length === 1 ? videoIds[0] : undefined,
+    topK: firstFiveQuestion ? 20 : 6
+  });
+
+  const retrievedChunks = firstFiveQuestion
+    ? relevantChunks
+      .filter((chunk) => chunk.startTimeSeconds <= 8)
+      .sort((a, b) => a.startTimeSeconds - b.startTimeSeconds)
+      .slice(0, 8)
+    : relevantChunks;
+
+  const transcriptEvidence = await collectTranscriptEvidence(videoIds, dependencies.vectorStore);
+
+  const citations = retrievedChunks.length
+    ? formatCitations(retrievedChunks as RetrievedChunk[])
+    : ((): Citation[] => {
+        const metaCites: Citation[] = [];
+        const videoA = resolvedContext?.videoA ?? dependencies.videoRegistry.get('A');
+        const videoB = resolvedContext?.videoB ?? dependencies.videoRegistry.get('B');
+
+        if (videoA) {
+          metaCites.push({
+            videoId: 'A',
+            chunkId: 'meta',
+            text: videoA.transcriptPreview || videoA.description,
+            startTimeSeconds: 0,
+            endTimeSeconds: 0,
+            sourceUrl: videoA.sourceUrl,
+            metadata: { title: videoA.title, creator: videoA.creator }
+          });
+        }
+
+        if (videoB) {
+          metaCites.push({
+            videoId: 'B',
+            chunkId: 'meta',
+            text: videoB.transcriptPreview || videoB.description,
+            startTimeSeconds: 0,
+            endTimeSeconds: 0,
+            sourceUrl: videoB.sourceUrl,
+            metadata: { title: videoB.title, creator: videoB.creator }
+          });
+        }
+
+        return metaCites;
+      })();
+
+  return {
+    retrievedChunks: retrievedChunks as RetrievedChunk[],
+    transcriptEvidence,
+    citations
+  };
 }
 
 function isFirstFiveSecondsQuestion(question: string) {
@@ -176,6 +276,7 @@ export function createRagEngine(dependencies: RagDependencies) {
       videoIds: input?.videoIds ?? ['A', 'B'],
       context: resolvedContext,
       retrievedChunks: [],
+      transcriptEvidence: [],
       answer: '',
       citations: []
     } as RagState);
@@ -208,6 +309,13 @@ export function createRagEngine(dependencies: RagDependencies) {
         retrievedChunks: filteredChunks as RetrievedChunk[]
       };
     })
+    .addNode('collect-evidence', async (state: RagState) => {
+      const transcriptEvidence = await collectTranscriptEvidence(state.videoIds, dependencies.vectorStore);
+
+      return {
+        transcriptEvidence
+      };
+    })
     .addNode('generate', async (state: RagState) => {
       const prompt = await buildPrompt(state, dependencies.videoRegistry, dependencies.conversationStore);
       const answer = await llm.generate(prompt);
@@ -216,6 +324,9 @@ export function createRagEngine(dependencies: RagDependencies) {
         role: 'assistant',
         content: answer,
         timestamp: new Date().toISOString()
+      }, {
+        citations: formatCitations(state.retrievedChunks),
+        transcriptEvidence: state.transcriptEvidence
       });
 
       // If retrieved transcript chunks are empty, synthesize metadata citations
@@ -227,11 +338,27 @@ export function createRagEngine(dependencies: RagDependencies) {
             const videoB = state.context?.videoB ?? dependencies.videoRegistry.get('B');
 
             if (videoA) {
-              metaCites.push({ videoId: 'A', chunkId: 'meta', startTimeSeconds: 0, endTimeSeconds: 0 });
+              metaCites.push({
+                videoId: 'A',
+                chunkId: 'meta',
+                text: videoA.transcriptPreview || videoA.description,
+                startTimeSeconds: 0,
+                endTimeSeconds: 0,
+                sourceUrl: videoA.sourceUrl,
+                metadata: { title: videoA.title, creator: videoA.creator }
+              });
             }
 
             if (videoB) {
-              metaCites.push({ videoId: 'B', chunkId: 'meta', startTimeSeconds: 0, endTimeSeconds: 0 });
+              metaCites.push({
+                videoId: 'B',
+                chunkId: 'meta',
+                text: videoB.transcriptPreview || videoB.description,
+                startTimeSeconds: 0,
+                endTimeSeconds: 0,
+                sourceUrl: videoB.sourceUrl,
+                metadata: { title: videoB.title, creator: videoB.creator }
+              });
             }
 
             return metaCites;
@@ -239,16 +366,19 @@ export function createRagEngine(dependencies: RagDependencies) {
 
       return {
         answer,
-        citations
+        citations,
+        transcriptEvidence: state.transcriptEvidence
       };
     })
     .addEdge(START, 'retrieve')
-    .addEdge('retrieve', 'generate')
+    .addEdge('retrieve', 'collect-evidence')
+    .addEdge('collect-evidence', 'generate')
     .addEdge('generate', END)
     .compile();
 
   return {
     answer: answerQuestion,
+    inspectEvidence: async (question: string, input?: Partial<Pick<RagState, 'videoIds' | 'context'>>) => inspectQuestionEvidence(question, dependencies, input),
     async *streamAnswer(question: string, input?: Partial<Pick<RagState, 'conversationId' | 'videoIds' | 'context'>>) {
       const response = await answerQuestion(question, input);
       const tokens = response.answer.match(/.{1,80}/g) ?? [response.answer];

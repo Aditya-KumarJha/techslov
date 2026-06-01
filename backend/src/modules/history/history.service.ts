@@ -1,6 +1,58 @@
 import { getAppContainer } from '../../lib/runtime/app-container.js';
 import type { ConversationVideoContext } from '../../types/api.js';
 
+async function hydrateConversationThreadEvidence() {
+  const container = getAppContainer();
+  return container;
+}
+
+export async function enrichConversationThread(conversationId: string) {
+  const container = await hydrateConversationThreadEvidence();
+  const thread = await container.conversationStore.getConversationThread(conversationId);
+
+  if (!thread) {
+    return null;
+  }
+
+  const activeContext = thread.contexts[thread.activeContextIndex] ?? thread.contexts[0] ?? null;
+  const turns = [...thread.turns];
+
+  let latestUserQuestion: string | null = null;
+
+  for (let index = 0; index < turns.length; index += 1) {
+    const turn = turns[index];
+
+    if (turn.role === 'user') {
+      latestUserQuestion = turn.content;
+      continue;
+    }
+
+    if (turn.citations?.length && turn.transcriptEvidence?.length) {
+      continue;
+    }
+
+    if (!latestUserQuestion) {
+      continue;
+    }
+
+    const evidence = await container.ragEngine.inspectEvidence(latestUserQuestion, {
+      context: activeContext ?? undefined,
+      videoIds: ['A', 'B']
+    });
+
+    turns[index] = {
+      ...turn,
+      citations: turn.citations?.length ? turn.citations : evidence.citations,
+      transcriptEvidence: turn.transcriptEvidence?.length ? turn.transcriptEvidence : evidence.transcriptEvidence
+    };
+  }
+
+  return {
+    ...thread,
+    turns
+  };
+}
+
 export async function listJobHistory() {
   return getAppContainer().jobHistoryStore.list();
 }
@@ -14,7 +66,7 @@ export async function listConversationHistory() {
 }
 
 export async function getConversationHistory(conversationId: string) {
-  return getAppContainer().conversationStore.getConversationThread(conversationId);
+  return enrichConversationThread(conversationId);
 }
 
 export async function renameConversation(conversationId: string, title: string) {

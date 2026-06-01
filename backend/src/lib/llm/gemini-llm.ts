@@ -1,5 +1,15 @@
 import { env } from '../../config/env.js';
 
+function truncateForLog(value: string, maxLength = 2000) {
+  const normalized = value.trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength).trimEnd()}...`;
+}
+
 type GeminiGenerateResponse = {
   candidates?: Array<{
     content?: {
@@ -39,7 +49,20 @@ export class GeminiLlm {
     );
 
     if (!response.ok) {
-      throw new Error(`Gemini generation request failed with status ${response.status}`);
+      const body = await response.text();
+      const trimmedBody = truncateForLog(body);
+
+      // Keep the failure visible in server logs with the remote payload attached.
+      // eslint-disable-next-line no-console
+      console.error('Gemini generation request failed', {
+        status: response.status,
+        statusText: response.statusText,
+        body: trimmedBody
+      });
+
+      throw new Error(
+        `Gemini generation request failed with status ${response.status}: ${trimmedBody || response.statusText}`
+      );
     }
 
     const payload = (await response.json()) as GeminiGenerateResponse;

@@ -1,8 +1,8 @@
 import { Pool } from 'pg';
 
 import { env } from '../../config/env.js';
-import type { TranscriptChunk } from '../transcript/transcript-fetcher.js';
 import type { EmbeddedTranscriptChunk } from './memory-vector-store.js';
+import type { TranscriptEvidenceChunk } from './vector-store.js';
 
 export class PgvectorVectorStore {
   private readonly pool: Pool;
@@ -116,6 +116,36 @@ export class PgvectorVectorStore {
       score: Number(row.score),
       embedding: queryEmbedding,
       metadata: row.metadata ?? {}
-    })) as Array<TranscriptChunk & { score: number; embedding: number[]; metadata: Record<string, unknown> }>;
+    })) as TranscriptEvidenceChunk[];
+  }
+
+  async listByVideoId(videoId: 'A' | 'B'): Promise<TranscriptEvidenceChunk[]> {
+    const result = await this.pool.query(
+      `
+        SELECT
+          chunk_id,
+          video_id,
+          source_url,
+          text,
+          start_time_seconds,
+          end_time_seconds,
+          metadata
+        FROM ${env.PGVECTOR_TABLE}
+        WHERE video_id = $1
+        ORDER BY start_time_seconds ASC, chunk_id ASC
+      `,
+      [videoId]
+    );
+
+    return result.rows.map((row) => ({
+      chunkId: row.chunk_id,
+      videoId: row.video_id,
+      sourceUrl: row.source_url,
+      text: row.text,
+      startTimeSeconds: Number(row.start_time_seconds),
+      endTimeSeconds: Number(row.end_time_seconds),
+      score: undefined,
+      metadata: row.metadata ?? {}
+    })) as TranscriptEvidenceChunk[];
   }
 }

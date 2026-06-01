@@ -11,7 +11,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   FRONTEND_ORIGIN: z.string().default('http://localhost:5173'),
   GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default('gemini-3.5-flash'),
+  GEMINI_MODEL: z.string().default('gemini-3.1-flash-lite'),
   GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-2'),
   DATABASE_URL: z.string().optional(),
   VECTOR_STORE: z.enum(['pgvector', 'qdrant', 'chroma', 'pinecone', 'weaviate']).default('pgvector'),

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 
 import {
+  addConversationContext,
   deleteConversation,
   fetchConversation,
   fetchVideo,
@@ -160,6 +161,8 @@ export function SocialRagDashboard() {
           id: String(turn.id),
           role: turn.role,
           content: turn.content,
+          citations: turn.citations,
+          transcriptEvidence: turn.transcriptEvidence,
         })),
       );
       if (thread.contexts.length) {
@@ -314,13 +317,24 @@ export function SocialRagDashboard() {
       setVideoA(indexedVideos.A);
       setVideoB(indexedVideos.B);
       setHideGlobalVideos(false);
-      setMessages([]);
-      setConversationId(null);
-      setConversationTitle("New chat");
-      setConversationContexts([]);
-      setActiveContextIndexState(0);
       setInput("");
-      window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
+
+      if (conversationId) {
+        const nextContext = createConversationContext(indexedVideos.A, indexedVideos.B);
+
+        if (nextContext) {
+          await addConversationContext(conversationId, nextContext);
+          await loadConversation(conversationId);
+        }
+      } else {
+        setMessages([]);
+        setConversationId(null);
+        setConversationTitle("New chat");
+        setConversationContexts([]);
+        setActiveContextIndexState(0);
+        window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
+      }
+
       await refreshConversationList();
     } catch (ingestError) {
       setError(ingestError instanceof Error ? ingestError.message : "Failed to ingest videos");
@@ -390,6 +404,7 @@ export function SocialRagDashboard() {
               ...assistantMessage,
               content: finalResponse.answer,
               citations: finalResponse.citations,
+                transcriptEvidence: finalResponse.transcriptEvidence,
             }));
           },
         },

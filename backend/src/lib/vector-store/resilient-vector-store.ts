@@ -54,4 +54,21 @@ export class ResilientVectorStore implements VectorStoreAdapter {
       return this.fallback.search(queryEmbedding, filters);
     }
   }
+
+  async listByVideoId(videoId: 'A' | 'B') {
+    if (this.shouldFallback(undefined)) {
+      return this.fallback.listByVideoId(videoId);
+    }
+
+    try {
+      return await this.primary.listByVideoId(videoId);
+    } catch (error) {
+      if (!this.shouldFallback(error)) {
+        throw error;
+      }
+
+      this.activateFallback();
+      return this.fallback.listByVideoId(videoId);
+    }
+  }
 }

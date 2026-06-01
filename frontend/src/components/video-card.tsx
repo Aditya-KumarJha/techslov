@@ -86,6 +86,16 @@ export function VideoCard({ video, videoLabel, loading, compact = false }: Video
               {video.hashtags.length ? `#${video.hashtags.join(" #")}` : "None"}
             </p>
           </div>
+
+          <div className={`rounded-2xl border border-white/10 bg-slate-950/40 ${compact ? 'p-2.5 text-xs' : 'p-3 text-sm'} text-slate-300`}>
+            <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.22em] text-slate-400">
+              <span>Transcript</span>
+              <span>{video.transcriptChunkCount ?? 0} chunks</span>
+            </div>
+            <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-slate-200/90">
+              {video.transcriptPreview || "No transcript preview available."}
+            </p>
+          </div>
         </div>
       ) : (
         <div className={`${compact ? 'mt-3 p-3 text-xs leading-5' : 'mt-4 p-4 text-sm leading-6'} rounded-2xl border border-dashed border-white/10 bg-slate-950/30 text-slate-400`}>

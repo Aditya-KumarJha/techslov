@@ -45,7 +45,9 @@ CREATE TABLE IF NOT EXISTS conversation_turns (
   conversation_id text NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
   role text NOT NULL,
   content text NOT NULL,
-  timestamp timestamptz NOT NULL
+  timestamp timestamptz NOT NULL,
+  citations jsonb NOT NULL DEFAULT '[]'::jsonb,
+  transcript_evidence jsonb NOT NULL DEFAULT '[]'::jsonb
 );
 
 -- Vector store table (pgvector)

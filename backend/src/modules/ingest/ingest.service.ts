@@ -28,8 +28,24 @@ function calculateEngagementRate(views: number, likes: number, comments: number)
 
 async function ingestVideo(videoId: 'A' | 'B', sourceUrl: string): Promise<IngestedVideo> {
   const container = getAppContainer();
-  const metadata = await container.transcriptFetcher.fetchMetadata(sourceUrl);
-  const transcriptSegments: TranscriptSegment[] = await container.transcriptFetcher.fetchTranscript(sourceUrl);
+  let metadata;
+  try {
+    metadata = await container.transcriptFetcher.fetchMetadata(sourceUrl);
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch metadata for video ${videoId} from ${sourceUrl}: ${error instanceof Error ? error.message : 'Unknown metadata error'}`
+    );
+  }
+
+  let transcriptSegments: TranscriptSegment[];
+  try {
+    transcriptSegments = await container.transcriptFetcher.fetchTranscript(sourceUrl);
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch transcript for video ${videoId} from ${sourceUrl}: ${error instanceof Error ? error.message : 'Unknown transcript error'}`
+    );
+  }
+
   const durationSeconds = Math.round(metadata.durationSeconds);
   const transcriptText = transcriptSegments.map((segment) => segment.text).join(' ').trim();
   const transcriptPreview = transcriptText.slice(0, 180);
@@ -44,7 +60,16 @@ async function ingestVideo(videoId: 'A' | 'B', sourceUrl: string): Promise<Inges
       sourceUrl,
       text: transcriptText
     });
-  const embeddings = await container.embeddings.embedDocuments(transcriptChunks.map((chunk) => chunk.text));
+
+  let embeddings;
+  try {
+    embeddings = await container.embeddings.embedDocuments(transcriptChunks.map((chunk) => chunk.text));
+  } catch (error) {
+    throw new Error(
+      `Failed to embed transcript chunks for video ${videoId} from ${sourceUrl}: ${error instanceof Error ? error.message : 'Unknown embedding error'}`
+    );
+  }
+
   const enrichedChunks = transcriptChunks.map((chunk, index) => ({
     ...chunk,
     embedding: embeddings[index] ?? [],
@@ -56,7 +81,13 @@ async function ingestVideo(videoId: 'A' | 'B', sourceUrl: string): Promise<Inges
     }
   }));
 
-  await container.vectorStore.upsertChunks(enrichedChunks);
+  try {
+    await container.vectorStore.upsertChunks(enrichedChunks);
+  } catch (error) {
+    throw new Error(
+      `Failed to store transcript chunks for video ${videoId} from ${sourceUrl}: ${error instanceof Error ? error.message : 'Unknown vector-store error'}`
+    );
+  }
 
   const engagementRate = calculateEngagementRate(metadata.views, metadata.likes, metadata.comments);
 
@@ -78,12 +109,18 @@ async function ingestVideo(videoId: 'A' | 'B', sourceUrl: string): Promise<Inges
     transcriptPreview
   };
 
-  await container.videoRegistry.upsert({
-    ...storedVideo,
-    transcript: transcriptText,
-    transcriptPreview,
-    transcriptChunkCount: transcriptChunks.length
-  });
+  try {
+    await container.videoRegistry.upsert({
+      ...storedVideo,
+      transcript: transcriptText,
+      transcriptPreview,
+      transcriptChunkCount: transcriptChunks.length
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to persist video metadata for video ${videoId} from ${sourceUrl}: ${error instanceof Error ? error.message : 'Unknown persistence error'}`
+    );
+  }
 
   return storedVideo;
 }

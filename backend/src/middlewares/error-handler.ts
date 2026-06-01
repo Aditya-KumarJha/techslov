@@ -16,7 +16,9 @@ export function errorHandler(
 
   const statusCode = error.statusCode ?? 500;
   const message =
-    statusCode >= 500 ? 'Internal Server Error' : error.message || 'Request failed';
+    statusCode >= 500
+      ? `${error.message || 'Internal Server Error'}`
+      : error.message || 'Request failed';
 
   reply.code(statusCode).send({
     error: statusCode >= 500 ? 'Internal Server Error' : error.name,

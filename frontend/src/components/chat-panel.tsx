@@ -3,8 +3,8 @@
 import { useEffect, useRef } from "react";
 import type { ChatMessage } from "@/types/social-rag";
 import { CitationList } from "./citation-list";
+import { TranscriptEvidenceList } from "./transcript-evidence-list";
 import { ChatBubbleIcon, SendIcon, SparkIcon } from "./ui-icons";
-import { formatTimeRange } from "@/lib/format";
 
 type ChatPanelProps = {
   conversationId: string | null;
@@ -118,8 +118,9 @@ export function ChatPanel({
                           : "border-white/10 bg-white/5 text-slate-100"
                       }`}
                     >
-                      {renderMessageContent(message.content)}
                       {message.citations?.length ? <CitationList citations={message.citations} /> : null}
+                      {message.transcriptEvidence?.length ? <TranscriptEvidenceList evidence={message.transcriptEvidence} /> : null}
+                      {renderMessageContent(message.content)}
                     </article>
                   </div>
 

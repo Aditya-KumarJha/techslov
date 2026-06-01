@@ -1,11 +1,16 @@
 import type { Pool } from 'pg';
 
 import type {
+  Citation,
   ConversationSummary,
   ConversationVideoContext,
   ConversationThread,
   ConversationTurn
 } from '../../types/api.js';
+
+type StoredConversationTurn = ConversationTurn & {
+  citations?: Citation[];
+};
 
 function normalizeTitle(title: string) {
   const cleaned = title.replace(/\s+/g, ' ').trim();
@@ -46,7 +51,7 @@ export class ConversationStore {
   async getConversation(conversationId: string): Promise<ConversationTurn[]> {
     const result = await this.pool.query(
       `
-        SELECT id, role, content, timestamp
+        SELECT id, role, content, timestamp, citations, transcript_evidence
         FROM conversation_turns
         WHERE conversation_id = $1
         ORDER BY timestamp ASC, id ASC
@@ -58,7 +63,9 @@ export class ConversationStore {
       id: Number(row.id),
       role: row.role,
       content: row.content,
-      timestamp: row.timestamp.toISOString()
+      timestamp: row.timestamp.toISOString(),
+      citations: Array.isArray(row.citations) ? row.citations : undefined,
+      transcriptEvidence: Array.isArray(row.transcript_evidence) ? row.transcript_evidence : undefined
     }));
   }
 
@@ -225,7 +232,7 @@ export class ConversationStore {
   async appendTurn(
     conversationId: string,
     turn: Omit<ConversationTurn, 'id'>,
-    options?: { title?: string; context?: ConversationVideoContext }
+    options?: { title?: string; context?: ConversationVideoContext; citations?: Citation[]; transcriptEvidence?: StoredConversationTurn['transcriptEvidence'] }
   ) {
     const title = options?.title ? normalizeTitle(options.title) : '';
 
@@ -248,10 +255,17 @@ export class ConversationStore {
 
     await this.pool.query(
       `
-        INSERT INTO conversation_turns (conversation_id, role, content, timestamp)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO conversation_turns (conversation_id, role, content, timestamp, citations, transcript_evidence)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
       `,
-      [conversationId, turn.role, turn.content, turn.timestamp]
+      [
+        conversationId,
+        turn.role,
+        turn.content,
+        turn.timestamp,
+        JSON.stringify(turn.role === 'assistant' ? options?.citations ?? [] : []),
+        JSON.stringify(turn.role === 'assistant' ? options?.transcriptEvidence ?? [] : [])
+      ]
     );
 
     await this.pool.query('UPDATE conversations SET updated_at = now() WHERE conversation_id = $1', [conversationId]);

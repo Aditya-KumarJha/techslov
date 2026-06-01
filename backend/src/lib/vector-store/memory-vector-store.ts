@@ -1,5 +1,6 @@
 import type { TranscriptChunk } from '../transcript/transcript-fetcher.js';
 import { cosineSimilarity } from '../similarity/cosine.js';
+import type { TranscriptEvidenceChunk } from './vector-store.js';
 
 export type EmbeddedTranscriptChunk = TranscriptChunk & {
   embedding: number[];
@@ -40,7 +41,13 @@ export class MemoryVectorStore {
       .slice(0, topK);
   }
 
-  async listByVideoId(videoId: 'A' | 'B') {
-    return this.documents.filter((document) => document.videoId === videoId);
+  async listByVideoId(videoId: 'A' | 'B'): Promise<TranscriptEvidenceChunk[]> {
+    return this.documents
+      .filter((document) => document.videoId === videoId)
+      .sort((left, right) => left.startTimeSeconds - right.startTimeSeconds)
+      .map((document) => ({
+        ...document,
+        score: undefined
+      }));
   }
 }
