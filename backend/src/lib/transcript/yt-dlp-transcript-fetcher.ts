@@ -274,14 +274,38 @@ export class YtDlpTranscriptFetcher {
 
   private async fetchYtDlpPayload(sourceUrl: string) {
     const cookiesArg = this.getCookiesArg(sourceUrl);
-    const output = await execFile('yt-dlp', [
-      '--dump-single-json',
-      '--skip-download',
-      '--no-playlist',
-      ...cookiesArg,
-      sourceUrl
-    ]);
-    return JSON.parse(output.stdout);
+    try {
+      const output = await execFile('yt-dlp', [
+        '--dump-single-json',
+        '--skip-download',
+        '--no-playlist',
+        ...cookiesArg,
+        sourceUrl
+      ]);
+
+      return JSON.parse(output.stdout);
+    } catch (err) {
+      // Improve error messaging for common yt-dlp failures (cookies, JS runtime, login prompts)
+      const message = err instanceof Error ? err.message : String(err);
+      const lower = message.toLowerCase();
+
+      if (lower.includes('cookies') || lower.includes('sign in') || lower.includes('not a bot')) {
+        throw new Error(
+          `yt-dlp failed to fetch metadata for ${sourceUrl}: ${message}. ` +
+            'This usually means YouTube requires authentication. Provide fresh cookies using the YOUTUBE_COOKIES_FILE environment variable (path to cookies.txt) or set YOUTUBE_COOKIES_CONTENT with the cookies file contents. See https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies'
+        );
+      }
+
+      if (lower.includes('no supported javascript runtime') || lower.includes('ejs')) {
+        throw new Error(
+          `yt-dlp failed for ${sourceUrl}: ${message}. ` +
+            'yt-dlp warns about missing JavaScript runtimes — install a supported runtime (node/deno) or configure yt-dlp accordingly. See https://github.com/yt-dlp/yt-dlp/wiki/EJS'
+        );
+      }
+
+      // Generic rethrow with stderr included
+      throw new Error(`yt-dlp failed for ${sourceUrl}: ${message}`);
+    }
   }
 
   private async fetchTranscriptWithGroqWhisper(audioFilePath: string): Promise<TranscriptSegment[]> {
