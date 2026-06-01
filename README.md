@@ -139,7 +139,9 @@ cd techslov
 
 ### 1. Fastify Backend on Render
 * **Service Type:** Web Service
-* **Build Command:** `npm install && npm run build`
+* **Build Command:** `npm install --include=dev && npm run build`
+  > [!IMPORTANT]
+  > Because Render automatically runs in production mode (`NODE_ENV=production`), a standard `npm install` skips installing `devDependencies`. You MUST use `npm install --include=dev && npm run build` to ensure type declarations (like `@types/pg`) and TypeScript compiler (`tsc`) are loaded and executed during compilation!
 * **Start Command:** `npm run start` (Starts highly optimized compiled JavaScript server via `node dist/server.js`)
 * **Environment Configs:**
   * Add your Neon `DATABASE_URL` (or any pgvector enabled database).

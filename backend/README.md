@@ -166,7 +166,7 @@ When deploying this service on **Render**, configure a **Web Service** with:
 
 ### 1. Build and Start Settings
 * **Runtime:** `Node`
-* **Build Command:** `npm install && npm run build` (This installs dev dependencies like TypeScript, compiles the code into the `dist/` directory, and automatically prunes dev packages for a lightweight, secure production container).
+* **Build Command:** `npm install --include=dev && npm run build` (This tells NPM to temporarily include `devDependencies` during `npm install` even when Render runs in production mode. This makes typescript and type packages like `@types/pg` available to successfully build the project in the `dist/` directory, after which they are pruned automatically for a lightweight container).
 * **Start Command:** `npm run start` (Which fires `node dist/server.js` using native optimized Node).
 
 ### 2. Environment Configurations
