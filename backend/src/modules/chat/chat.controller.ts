@@ -9,7 +9,8 @@ import { getAuthenticatedUser, getRequestUserId } from '../../lib/auth/auth.js';
 type ChatRequest = FastifyRequest<{ Body: unknown }>;
 
 export async function chatController(request: ChatRequest, reply: FastifyReply) {
-  const payload = chatMessageSchema.parse(request.body);
+  const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
+  const payload = chatMessageSchema.parse(body);
   const user = await getAuthenticatedUser(request);
 
   if (user) {
@@ -29,7 +30,8 @@ export async function chatController(request: ChatRequest, reply: FastifyReply) 
 
 export async function chatStreamController(request: ChatRequest, reply: FastifyReply) {
   try {
-    const payload = chatMessageSchema.parse(request.body);
+    const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
+    const payload = chatMessageSchema.parse(body);
     const container = getAppContainer();
     const user = await getAuthenticatedUser(request);
 

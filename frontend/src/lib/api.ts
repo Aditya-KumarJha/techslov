@@ -113,7 +113,7 @@ export async function renameConversation(conversationId: string, title: string, 
 export async function deleteConversation(conversationId: string, auth?: AuthOptions) {
   const response = await fetch(`${API_BASE_URL}/history/conversations/${conversationId}`, {
     method: "DELETE",
-    headers: buildHeaders(undefined, auth),
+    headers: buildHeaders({ method: "DELETE" }, auth),
   });
 
   if (!response.ok && response.status !== 204) {

@@ -87,7 +87,8 @@ export async function updateConversationTitleController(
     return reply;
   }
 
-  const payload = updateConversationTitleSchema.parse(request.body);
+  const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
+  const payload = updateConversationTitleSchema.parse(body);
   const title = await renameConversation(request.params.conversationId, clerkUserId, payload.title);
 
   if (!title) {
@@ -127,7 +128,8 @@ export async function updateConversationContextIndexController(
     return reply;
   }
 
-  const payload = updateConversationContextIndexSchema.parse(request.body);
+  const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
+  const payload = updateConversationContextIndexSchema.parse(body);
   request.log.info({
     conversationId: request.params.conversationId,
     clerkUserId,
@@ -164,7 +166,8 @@ export async function addConversationContextController(
     return reply;
   }
 
-  const payload = conversationVideoContextSchema.parse(request.body) as ConversationVideoContext;
+  const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
+  const payload = conversationVideoContextSchema.parse(body) as ConversationVideoContext;
   await saveConversationContext(request.params.conversationId, clerkUserId, payload);
   return reply.code(201).send({ data: payload });
 }
