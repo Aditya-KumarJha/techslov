@@ -90,6 +90,16 @@ export function SocialRagDashboard() {
   const [showConversationContext, setShowConversationContext] = useState(false);
   const authSyncRef = useRef<string | null>(null);
 
+  // Custom Modal States
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [renameConversationId, setRenameConversationId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConversationId, setDeleteConversationId] = useState<string | null>(null);
+
+  const [resetFormKey, setResetFormKey] = useState(0);
+
   const formatUserError = (value: unknown, fallback: string) => {
     const message = value instanceof Error ? value.message : typeof value === "string" ? value : "";
     const normalized = message.toLowerCase();
@@ -108,7 +118,7 @@ export function SocialRagDashboard() {
       return fallback;
     }
 
-    return fallback;
+    return message;
   };
 
   const conversationStorageKey = user ? `social-rag-conversation-id:${user.id}` : null;
@@ -146,7 +156,13 @@ export function SocialRagDashboard() {
     setMessages([]);
     setConversationContexts([]);
     setActiveContextIndexState(0);
-    applyGlobalVideos();
+    setGlobalVideoA(null);
+    setGlobalVideoB(null);
+    setVideoA(null);
+    setVideoB(null);
+    setShowConversationContext(false);
+    setInput("");
+    setResetFormKey((prev) => prev + 1);
   };
 
   const refreshConversationList = async (authOptions?: { token?: string | null }) => {
@@ -194,6 +210,7 @@ export function SocialRagDashboard() {
     targetConversationId: string | null,
     authOptions?: { token?: string | null },
   ) => {
+    setError(null);
     if (!targetConversationId || !isSignedIn) {
       clearConversationState();
       if (conversationStorageKey) {
@@ -201,8 +218,6 @@ export function SocialRagDashboard() {
       }
       return;
     }
-
-    setError(null);
     setIsLoadingConversations(true);
 
     try {
@@ -248,13 +263,18 @@ export function SocialRagDashboard() {
   };
 
   const shiftConversationContext = async (direction: -1 | 1) => {
-    if (!conversationId || conversationContexts.length <= 1 || !isSignedIn) {
+    if (!conversationId || conversationContexts.length <= 1) {
       return;
     }
 
+    setError(null);
     const nextIndex =
       (activeContextIndex + direction + conversationContexts.length) % conversationContexts.length;
     applyConversationContext(conversationContexts, nextIndex);
+
+    if (!isSignedIn) {
+      return;
+    }
 
     try {
       await setConversationContextIndex(
@@ -262,35 +282,42 @@ export function SocialRagDashboard() {
         nextIndex,
         await resolveAuthOptions(),
       );
+      setError(null);
     } catch (contextError) {
       setError(formatUserError(contextError, "We couldn't switch the saved context right now."));
     }
   };
 
-  const handleRenameConversation = async (conversationIdValue: string) => {
+  const handleRenameConversation = (conversationIdValue: string) => {
     if (!isSignedIn) {
       return;
     }
 
+    setError(null);
     const currentConversation = conversationList.find(
       (conversation) => conversation.conversationId === conversationIdValue,
     );
 
-    const nextTitle = window.prompt("Rename this chat", currentConversation?.title ?? "");
-
-    if (nextTitle === null) {
-      return;
+    if (currentConversation) {
+      setRenameConversationId(conversationIdValue);
+      setRenameValue(currentConversation.title);
+      setRenameModalOpen(true);
     }
+  };
 
-    const trimmedTitle = nextTitle.trim();
+  const submitRename = async () => {
+    if (!renameConversationId) return;
+    const trimmedTitle = renameValue.trim();
+    if (!trimmedTitle) return;
 
-    if (!trimmedTitle) {
-      return;
-    }
+    const idToRename = renameConversationId;
+    setRenameModalOpen(false);
+    setRenameConversationId(null);
+    setError(null);
 
     try {
       const updated = await renameConversation(
-        conversationIdValue,
+        idToRename,
         trimmedTitle,
         await resolveAuthOptions(),
       );
@@ -300,21 +327,28 @@ export function SocialRagDashboard() {
     }
   };
 
-  const handleDeleteConversation = async (conversationIdValue: string) => {
+  const handleDeleteConversation = (conversationIdValue: string) => {
     if (!isSignedIn) {
       return;
     }
 
-    const confirmed = window.confirm("Delete this conversation permanently?");
+    setError(null);
+    setDeleteConversationId(conversationIdValue);
+    setDeleteModalOpen(true);
+  };
 
-    if (!confirmed) {
-      return;
-    }
+  const submitDelete = async () => {
+    if (!deleteConversationId) return;
+
+    const idToDelete = deleteConversationId;
+    setDeleteModalOpen(false);
+    setDeleteConversationId(null);
+    setError(null);
 
     try {
-      await deleteConversation(conversationIdValue, await resolveAuthOptions());
+      await deleteConversation(idToDelete, await resolveAuthOptions());
 
-      if (conversationIdValue === conversationId) {
+      if (idToDelete === conversationId) {
         await loadConversation(null);
       }
 
@@ -325,9 +359,34 @@ export function SocialRagDashboard() {
   };
 
   useEffect(() => {
+    const wakeup = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5050/api/v1";
+        await fetch(`${baseUrl}/health`);
+      } catch (err) {
+        console.warn("Backend wakeup ping failed:", err);
+      }
+    };
+    void wakeup();
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthLoaded) {
+      return;
+    }
+
     let active = true;
 
     const loadVideos = async () => {
+      if (!isSignedIn) {
+        setGlobalVideoA(null);
+        setGlobalVideoB(null);
+        setVideoA(null);
+        setVideoB(null);
+        setIsLoadingVideos(false);
+        return;
+      }
+
       try {
         const [fetchedA, fetchedB] = await Promise.all([fetchVideo("A"), fetchVideo("B")]);
 
@@ -355,7 +414,7 @@ export function SocialRagDashboard() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [isAuthLoaded, isSignedIn]);
 
   const syncAuthState = useEffectEvent(async () => {
     setError(null);
@@ -393,6 +452,24 @@ export function SocialRagDashboard() {
 
     void syncAuthState();
   }, [isAuthLoaded, isSignedIn, user?.id]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (ingestJob) {
+      const timer = setTimeout(() => {
+        setIngestJob(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [ingestJob]);
 
   const startIngest = async (values: { youtubeUrl: string; instagramUrl: string }) => {
     setError(null);
@@ -434,8 +511,13 @@ export function SocialRagDashboard() {
           await loadConversation(conversationId);
         }
       } else if (!conversationId) {
-        clearConversationState();
+        setConversationId(null);
+        setConversationTitle("New chat");
+        setMessages([]);
+        setConversationContexts([]);
+        setActiveContextIndexState(0);
       }
+
 
       await refreshConversationList();
     } catch (ingestError) {
@@ -463,7 +545,7 @@ export function SocialRagDashboard() {
       role: "user",
       content: trimmedMessage,
     };
-    const pendingContext = !conversationId ? createConversationContext(videoA, videoB) : null;
+    const currentActiveContext = conversationContexts[activeContextIndex] || createConversationContext(videoA, videoB);
     const history = messages
       .filter((messageItem) => messageItem.content.trim())
       .map((messageItem) => ({
@@ -496,7 +578,7 @@ export function SocialRagDashboard() {
           conversationId: isSignedIn ? conversationId ?? undefined : undefined,
           message: trimmedMessage,
           videoIds: ["A", "B"],
-          videoContext: pendingContext ?? undefined,
+          videoContext: currentActiveContext ?? undefined,
           history,
         },
         {
@@ -531,7 +613,7 @@ export function SocialRagDashboard() {
     } catch (chatError) {
       updateAssistantMessage((assistantMessage) => ({
         ...assistantMessage,
-        content: "I couldn't complete that response right now. Please try again.",
+        content: "please try again after sometime",
       }));
       setError(formatUserError(chatError, "We couldn't send that message right now."));
     } finally {
@@ -540,16 +622,16 @@ export function SocialRagDashboard() {
   };
 
   return (
-    <main className="h-[125dvh] overflow-hidden text-slate-100">
-      <div className="mx-auto grid h-[125dvh] w-full max-w-screen-2xl grid-cols-1 overflow-hidden lg:grid-cols-[300px_minmax(0,1fr)_420px]">
-        <aside className="hidden border-r border-white/10 bg-[rgba(255,255,255,0.02)] px-4 py-4 lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-[125dvh] lg:overflow-hidden">
+    <main className="min-h-screen text-slate-100">
+      <div className="mx-auto grid min-h-screen w-full max-w-screen-2xl grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)_420px]">
+        <aside className="hidden border-r border-white/10 bg-[rgba(255,255,255,0.02)] px-4 py-4 lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden">
           <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-white">
                 <SparkIcon className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm font-medium text-white">TechSlov</p>
+                <p className="text-sm font-medium text-white">CreatorLens</p>
                 <p className="text-xs text-slate-500">Social RAG Studio</p>
               </div>
             </div>
@@ -688,27 +770,21 @@ export function SocialRagDashboard() {
           </div>
         </aside>
 
-        <section className="flex h-[125dvh] min-h-0 flex-col overflow-hidden border-x border-white/10 bg-[rgba(255,255,255,0.01)]">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6">
+        <section className="flex min-h-screen flex-col border-x border-white/10 bg-[rgba(255,255,255,0.01)]">
+          <div className="flex flex-col gap-4 p-4 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3 rounded-[28px] border border-white/10 bg-[rgba(255,255,255,0.03)] px-4 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Authentication</p>
-                <h1 className="mt-2 text-xl font-semibold text-white sm:text-2xl">
+                <h1 className="text-xl font-semibold text-white sm:text-2xl">
                   {isSignedIn
                     ? `Welcome back${user?.firstName ? `, ${user.firstName}` : ""}`
                     : "Sign in to save private chats"}
                 </h1>
-                <p className="mt-1 text-sm text-slate-400">
-                  {isSignedIn
-                    ? "Your chat history and video contexts are stored only under your Clerk account."
-                    : "You can still use every feature as a guest, but guest chats are temporary and disappear on refresh."}
-                </p>
               </div>
 
               <div className="flex items-center gap-3 self-center">
                 {isSignedIn ? (
                   <div className="rounded-full border border-white/10 bg-white/5 p-1">
-                    <UserButton afterSignOutUrl="/" />
+                    <UserButton />
                   </div>
                 ) : (
                   <>
@@ -735,16 +811,24 @@ export function SocialRagDashboard() {
 
             <div>
               <IngestForm
-                defaultInstagramUrl={SAMPLE_INSTAGRAM_URL}
-                defaultYoutubeUrl={SAMPLE_YOUTUBE_URL}
+                key={`${conversationId || "new-chat"}-${resetFormKey}`}
+                defaultInstagramUrl=""
+                defaultYoutubeUrl=""
                 isLoading={isSubmittingIngest}
                 onSubmit={startIngest}
               />
             </div>
 
             {error ? (
-              <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                {error}
+              <div className="flex items-center justify-between rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                <span className="flex-1">{error}</span>
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="ml-3 text-rose-300 hover:text-white transition focus:outline-none"
+                >
+                  ✕
+                </button>
               </div>
             ) : null}
 
@@ -754,7 +838,7 @@ export function SocialRagDashboard() {
               </div>
             ) : null}
 
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+            <div className="flex h-[700px] sm:h-[750px] flex-col gap-4 overflow-hidden">
               <ChatPanel
                 conversationId={isSignedIn ? conversationId : null}
                 conversationTitle={conversationTitle}
@@ -762,6 +846,7 @@ export function SocialRagDashboard() {
                 isAuthenticated={Boolean(isSignedIn)}
                 isLoadingHistory={isLoadingConversations}
                 isStreaming={isStreaming}
+                isIngested={Boolean(videoA && videoB)}
                 messages={messages}
                 onInputChange={setInput}
                 onPromptSelect={(prompt) => {
@@ -776,7 +861,7 @@ export function SocialRagDashboard() {
           </div>
         </section>
 
-        <aside className="hidden h-[125dvh] overflow-y-auto border-l border-white/10 bg-[rgba(255,255,255,0.02)] px-4 py-4 xl:block">
+        <aside className="hidden h-screen overflow-y-auto border-l border-white/10 bg-[rgba(255,255,255,0.02)] px-4 py-4 lg:sticky lg:top-0 xl:block">
           <div className="flex min-h-full flex-col gap-3 overflow-hidden">
             <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
               <div>
@@ -815,6 +900,89 @@ export function SocialRagDashboard() {
           </div>
         </aside>
       </div>
+
+      {renameModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-[24px] border border-white/10 bg-[#161313] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-semibold text-white tracking-wide">Rename Chat</h3>
+            <p className="mt-1 text-xs text-slate-400">Change the title of this conversation.</p>
+            <div className="mt-4">
+              <input
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-white/20 focus:outline-none"
+                placeholder="Enter new chat title..."
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    void submitRename();
+                  }
+                }}
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setRenameModalOpen(false);
+                }}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-300 transition hover:bg-white/10 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void submitRename();
+                }}
+                className="rounded-xl bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-black transition hover:bg-white/90"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-[24px] border border-rose-500/20 bg-[#161313] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-semibold text-rose-400 tracking-wide">Delete Chat</h3>
+            <p className="mt-2 text-sm text-slate-300">
+              Are you sure you want to permanently delete this conversation? This action cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDeleteModalOpen(false);
+                }}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-300 transition hover:bg-white/10 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void submitDelete();
+                }}
+                className="rounded-xl bg-rose-500/20 border border-rose-500/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-rose-200 transition hover:bg-rose-500/35 hover:text-white"
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

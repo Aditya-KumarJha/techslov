@@ -17,6 +17,7 @@ type ChatPanelProps = {
   onInputChange: (value: string) => void;
   onPromptSelect: (prompt: string) => void;
   onSubmit: () => void;
+  isIngested: boolean;
 };
 
 const QUICK_PROMPTS = [
@@ -38,6 +39,7 @@ export function ChatPanel({
   onInputChange,
   onPromptSelect,
   onSubmit,
+  isIngested,
 }: ChatPanelProps) {
   // Filter out empty assistant placeholders so they don't render
   const visibleMessages = messages.filter(
@@ -88,8 +90,8 @@ export function ChatPanel({
         {QUICK_PROMPTS.map((prompt) => (
           <button
             key={prompt}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-slate-200 transition hover:border-white/30 hover:bg-white/10 hover:text-white"
-            disabled={isStreaming}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-slate-200 transition hover:border-white/30 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={isStreaming || !isIngested}
             onClick={() => onPromptSelect(prompt)}
             type="button"
           >
@@ -139,9 +141,14 @@ export function ChatPanel({
               );
             })
           ) : (
-            <div className="grid gap-2 rounded-2xl border border-dashed border-white/10 bg-white/5 p-6 text-sm leading-6 text-slate-400">
-              <span className="text-white">No messages yet.</span>
-              <span>Ingest two URLs, then ask a comparison question or load a saved thread.</span>
+            <div className="flex flex-col items-center justify-center py-10 px-4 text-center text-slate-400 h-full">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-400 mb-3 animate-pulse">
+                <ChatBubbleIcon className="h-6 w-6 text-white/60" />
+              </div>
+              <p className="text-sm font-medium text-white">No messages yet</p>
+              <p className="mt-1 text-xs text-slate-500 max-w-xs leading-relaxed">
+                Ingest two URLs, then ask a comparison question or load a saved thread.
+              </p>
             </div>
           )}
 
@@ -161,18 +168,18 @@ export function ChatPanel({
         <div className="mt-4 grid gap-3">
           <div className="rounded-3xl border border-white/10 bg-black/30 p-3">
             <input
-              className="h-10 w-full bg-transparent px-2 text-sm text-white outline-none placeholder:text-slate-500"
-              disabled={isStreaming}
+              className="h-10 w-full bg-transparent px-2 text-sm text-white outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isStreaming || !isIngested}
               onChange={(event) => onInputChange(event.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  if (!isStreaming) {
+                  if (!isStreaming && isIngested) {
                     onSubmit();
                   }
                 }
               }}
-              placeholder="Ask about the two videos..."
+              placeholder={isIngested ? "Ask about the two videos..." : "Please ingest two video URLs above to start chatting..."}
               value={input}
             />
           </div>
@@ -188,8 +195,8 @@ export function ChatPanel({
             </div>
 
             <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-slate-950 transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isStreaming || !input.trim()}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-slate-950 transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={isStreaming || !input.trim() || !isIngested}
               onClick={onSubmit}
               type="button"
             >

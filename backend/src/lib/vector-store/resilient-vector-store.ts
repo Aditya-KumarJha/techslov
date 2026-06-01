@@ -38,7 +38,15 @@ export class ResilientVectorStore implements VectorStoreAdapter {
     }
   }
 
-  async search(queryEmbedding: number[], filters?: { videoId?: 'A' | 'B'; topK?: number }) {
+  async search(
+    queryEmbedding: number[],
+    filters?: {
+      videoId?: 'A' | 'B';
+      sourceUrl?: string;
+      sourceUrls?: string[];
+      topK?: number;
+    }
+  ) {
     if (this.shouldFallback(undefined)) {
       return this.fallback.search(queryEmbedding, filters);
     }
@@ -69,6 +77,23 @@ export class ResilientVectorStore implements VectorStoreAdapter {
 
       this.activateFallback();
       return this.fallback.listByVideoId(videoId);
+    }
+  }
+
+  async listBySourceUrl(sourceUrl: string) {
+    if (this.shouldFallback(undefined)) {
+      return this.fallback.listBySourceUrl(sourceUrl);
+    }
+
+    try {
+      return await this.primary.listBySourceUrl(sourceUrl);
+    } catch (error) {
+      if (!this.shouldFallback(error)) {
+        throw error;
+      }
+
+      this.activateFallback();
+      return this.fallback.listBySourceUrl(sourceUrl);
     }
   }
 }

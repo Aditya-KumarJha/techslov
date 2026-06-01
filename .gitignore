@@ -1,0 +1,41 @@
+# IDEs and System files
+.DS_Store
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Node modules
+node_modules/
+dist/
+build/
+.next/
+out/
+tsconfig.tsbuildinfo
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# SQLite / Database / Data dirs
+*.db
+*.sqlite
+data/
+backend/data/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# OS metadata
+Thumbs.db
+ehthumbs.db

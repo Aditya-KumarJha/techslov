@@ -67,6 +67,7 @@ export class QdrantVectorStore implements VectorStoreAdapter {
       payload: {
         text: c.text,
         videoId: c.videoId,
+        sourceUrl: c.sourceUrl ?? null,
         startTimeSeconds: c.startTimeSeconds ?? null,
         endTimeSeconds: c.endTimeSeconds ?? null,
         metadata: c.metadata ?? {}
@@ -82,7 +83,15 @@ export class QdrantVectorStore implements VectorStoreAdapter {
     });
   }
 
-  async search(queryEmbedding: number[], filters?: { videoId?: 'A' | 'B'; topK?: number }) {
+  async search(
+    queryEmbedding: number[],
+    filters?: {
+      videoId?: 'A' | 'B';
+      sourceUrl?: string;
+      sourceUrls?: string[];
+      topK?: number;
+    }
+  ) {
     const limit = filters?.topK ?? 6;
 
     await this.ensureCollection();
@@ -95,8 +104,21 @@ export class QdrantVectorStore implements VectorStoreAdapter {
       with_vector: true
     };
 
+    const filterMust: any[] = [];
     if (filters?.videoId) {
-      body.filter = { must: [{ key: 'videoId', match: { value: filters.videoId } }] };
+      filterMust.push({ key: 'videoId', match: { value: filters.videoId } });
+    }
+    if (filters?.sourceUrl) {
+      filterMust.push({ key: 'sourceUrl', match: { value: filters.sourceUrl } });
+    }
+    if (filters?.sourceUrls && filters.sourceUrls.length > 0) {
+      filterMust.push({
+        should: filters.sourceUrls.map((url) => ({ key: 'sourceUrl', match: { value: url } }))
+      });
+    }
+
+    if (filterMust.length > 0) {
+      body.filter = { must: filterMust };
     }
 
     const res = await fetch(url, {
@@ -127,6 +149,7 @@ export class QdrantVectorStore implements VectorStoreAdapter {
         startTimeSeconds: payload.startTimeSeconds ?? null,
         endTimeSeconds: payload.endTimeSeconds ?? null,
         videoId: payload.videoId as 'A' | 'B',
+        sourceUrl: payload.sourceUrl ?? '',
         metadata: payload.metadata ?? {},
         score,
         embedding: vector
@@ -150,6 +173,58 @@ export class QdrantVectorStore implements VectorStoreAdapter {
         with_vector: false,
         offset: nextOffset ?? undefined,
         filter: { must: [{ key: 'videoId', match: { value: videoId } }] }
+      };
+
+      const res: Response = await fetch(url, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Qdrant scroll failed: ${res.status} ${text}`);
+      }
+
+      const json: any = await res.json();
+      const hits = json.result?.points ?? json.result ?? [];
+
+      for (const hit of hits) {
+        const payload = hit.payload ?? hit.point?.payload ?? {};
+
+        chunks.push({
+          chunkId: String(hit.id ?? hit.point?.id),
+          text: payload.text ?? payload.content ?? '',
+          startTimeSeconds: payload.startTimeSeconds ?? 0,
+          endTimeSeconds: payload.endTimeSeconds ?? 0,
+          videoId: payload.videoId as 'A' | 'B',
+          sourceUrl: payload.sourceUrl ?? '',
+          metadata: payload.metadata ?? {}
+        });
+      }
+
+      nextOffset = json.result?.next_page_offset ?? null;
+    } while (nextOffset != null);
+
+    return chunks
+      .filter((chunk) => chunk.text.length > 0)
+      .sort((left, right) => left.startTimeSeconds - right.startTimeSeconds);
+  }
+
+  async listBySourceUrl(sourceUrl: string): Promise<TranscriptEvidenceChunk[]> {
+    await this.ensureCollection();
+
+    const url = `${this.baseUrl}/collections/${encodeURIComponent(this.collection)}/points/scroll`;
+    const chunks: TranscriptEvidenceChunk[] = [];
+    let nextOffset: string | number | null = null;
+
+    do {
+      const body: Record<string, unknown> = {
+        limit: 100,
+        with_payload: true,
+        with_vector: false,
+        offset: nextOffset ?? undefined,
+        filter: { must: [{ key: 'sourceUrl', match: { value: sourceUrl } }] }
       };
 
       const res: Response = await fetch(url, {

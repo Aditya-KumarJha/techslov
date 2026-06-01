@@ -27,6 +27,8 @@ html {
     radial-gradient(circle at top, rgba(255, 255, 255, 0.05), transparent 30%),
     radial-gradient(circle at 15% 12%, rgba(255, 255, 255, 0.035), transparent 24%),
     linear-gradient(180deg, #090909 0%, #060606 50%, #040404 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 body {

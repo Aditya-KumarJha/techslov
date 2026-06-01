@@ -17,9 +17,27 @@ export function createApp() {
 
   app.register(sensible);
   app.register(helmet);
+  const origins = (env.FRONTEND_ORIGIN || '').split(',').map((o) => o.trim()).filter(Boolean);
+
   app.register(cors, {
-    origin: env.FRONTEND_ORIGIN,
-    credentials: true
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (
+        origins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin === 'http://localhost:5173' ||
+        origin === 'http://localhost:3000'
+      ) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'), false);
+    },
+    credentials: true,
+    methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS', 'PATCH']
   });
   app.register(rateLimit, {
     max: 200,

@@ -51,8 +51,10 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 }
 
 function buildHeaders(init?: RequestInit, auth?: AuthOptions) {
+  const hasBody = Boolean(init?.body);
+  const isDelete = init?.method === "DELETE";
   return {
-    "Content-Type": "application/json",
+    ...(!hasBody || isDelete ? {} : { "Content-Type": "application/json" }),
     ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
     ...(init?.headers ?? {}),
   };
@@ -180,7 +182,12 @@ export async function streamChatMessage(
 
   if (!response.ok || !response.body) {
     const errorPayload = await response.text();
-    throw new Error(errorPayload || `Request failed with status ${response.status}`);
+    let parsedMessage = errorPayload;
+    try {
+      const parsed = JSON.parse(errorPayload);
+      parsedMessage = parsed.message || parsed.error || errorPayload;
+    } catch {}
+    throw new Error(parsedMessage || `Request failed with status ${response.status}`);
   }
 
   const reader = response.body.getReader();
@@ -197,6 +204,11 @@ export async function streamChatMessage(
       buffer = buffer.slice(boundaryIndex + 2);
 
       for (const event of readSseEventStream(`${eventBlock}\n\n`)) {
+        if (event.event === "error") {
+          const payload = JSON.parse(event.data) as { message?: string };
+          throw new Error(payload.message || "please try again after sometime");
+        }
+
         if (event.event === "token") {
           const payload = JSON.parse(event.data) as { token?: string };
           if (payload.token) {

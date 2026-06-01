@@ -123,15 +123,33 @@ export async function updateConversationContextIndexController(
   const clerkUserId = requireUserId(request, reply);
 
   if (!clerkUserId) {
+    request.log.warn({ conversationId: request.params.conversationId }, 'updateConversationContextIndexController - Auth failed');
     return reply;
   }
 
   const payload = updateConversationContextIndexSchema.parse(request.body);
+  request.log.info({
+    conversationId: request.params.conversationId,
+    clerkUserId,
+    activeContextIndex: payload.activeContextIndex
+  }, 'updateConversationContextIndexController - Attempting update');
+
   const updated = await setConversationContextIndex(request.params.conversationId, clerkUserId, payload.activeContextIndex);
 
   if (!updated) {
+    request.log.error({
+      conversationId: request.params.conversationId,
+      clerkUserId,
+      activeContextIndex: payload.activeContextIndex
+    }, 'updateConversationContextIndexController - Update failed (404)');
     return reply.code(404).send({ message: 'Conversation history not found' });
   }
+
+  request.log.info({
+    conversationId: request.params.conversationId,
+    clerkUserId,
+    activeContextIndex: payload.activeContextIndex
+  }, 'updateConversationContextIndexController - Update succeeded');
 
   return reply.send({ data: { conversationId: request.params.conversationId, activeContextIndex: payload.activeContextIndex } });
 }

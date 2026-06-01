@@ -22,14 +22,27 @@ export class MemoryVectorStore {
     }
   }
 
-  async search(queryEmbedding: number[], filters?: { videoId?: 'A' | 'B'; topK?: number }) {
+  async search(
+    queryEmbedding: number[],
+    filters?: {
+      videoId?: 'A' | 'B';
+      sourceUrl?: string;
+      sourceUrls?: string[];
+      topK?: number;
+    }
+  ) {
     const topK = filters?.topK ?? 6;
     const filteredDocuments = this.documents.filter((document) => {
-      if (!filters?.videoId) {
-        return true;
+      if (filters?.videoId && document.videoId !== filters.videoId) {
+        return false;
       }
-
-      return document.videoId === filters.videoId;
+      if (filters?.sourceUrl && document.sourceUrl !== filters.sourceUrl) {
+        return false;
+      }
+      if (filters?.sourceUrls && !filters.sourceUrls.includes(document.sourceUrl)) {
+        return false;
+      }
+      return true;
     });
 
     return filteredDocuments
@@ -44,6 +57,16 @@ export class MemoryVectorStore {
   async listByVideoId(videoId: 'A' | 'B'): Promise<TranscriptEvidenceChunk[]> {
     return this.documents
       .filter((document) => document.videoId === videoId)
+      .sort((left, right) => left.startTimeSeconds - right.startTimeSeconds)
+      .map((document) => ({
+        ...document,
+        score: undefined
+      }));
+  }
+
+  async listBySourceUrl(sourceUrl: string): Promise<TranscriptEvidenceChunk[]> {
+    return this.documents
+      .filter((document) => document.sourceUrl === sourceUrl)
       .sort((left, right) => left.startTimeSeconds - right.startTimeSeconds)
       .map((document) => ({
         ...document,

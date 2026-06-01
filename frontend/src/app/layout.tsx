@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Social RAG Studio",
+  title: "CreatorLens | Social RAG Studio",
   description: "Compare two social videos with a streaming RAG chat interface.",
 };
 

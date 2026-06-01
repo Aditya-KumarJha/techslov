@@ -4,7 +4,7 @@ import type { EmbeddingsProvider } from '../embeddings/embeddings-provider.js';
 import { GeminiLlm } from '../llm/gemini-llm.js';
 import type { ConversationStore } from '../state/conversation-store.js';
 import type { VideoRegistry } from '../state/video-registry.js';
-import type { VectorStoreAdapter } from '../vector-store/vector-store.js';
+import type { VectorStoreAdapter, TranscriptEvidenceChunk } from '../vector-store/vector-store.js';
 import type {
   Citation,
   ConversationTurn,
@@ -88,7 +88,43 @@ function formatCitations(chunks: RetrievedChunk[]): Citation[] {
   }));
 }
 
-async function collectTranscriptEvidence(videoIds: VideoId[], vectorStore: VectorStoreAdapter) {
+async function collectTranscriptEvidence(
+  videoIds: VideoId[],
+  vectorStore: VectorStoreAdapter,
+  context: ConversationVideoContext | null
+) {
+  if (context) {
+    const chunksList: TranscriptEvidenceChunk[][] = [];
+    if (videoIds.includes('A') && context.videoA?.sourceUrl) {
+      const chunksA = await vectorStore.listBySourceUrl(context.videoA.sourceUrl);
+      chunksList.push(chunksA.map(c => ({ ...c, videoId: 'A' as const })));
+    }
+    if (videoIds.includes('B') && context.videoB?.sourceUrl) {
+      const chunksB = await vectorStore.listBySourceUrl(context.videoB.sourceUrl);
+      chunksList.push(chunksB.map(c => ({ ...c, videoId: 'B' as const })));
+    }
+
+    return chunksList
+      .flat()
+      .sort((left, right) => {
+        if (left.videoId !== right.videoId) {
+          return left.videoId.localeCompare(right.videoId);
+        }
+        return left.startTimeSeconds - right.startTimeSeconds;
+      })
+      .map((chunk) => ({
+        videoId: chunk.videoId,
+        chunkId: chunk.chunkId,
+        text: chunk.text,
+        startTimeSeconds: chunk.startTimeSeconds,
+        endTimeSeconds: chunk.endTimeSeconds,
+        sourceUrl: chunk.sourceUrl,
+        score: chunk.score,
+        metadata: chunk.metadata
+      }));
+  }
+
+  // Fallback to legacy behavior if no context is available
   const chunks = await Promise.all(videoIds.map(async (videoId) => vectorStore.listByVideoId(videoId)));
 
   return chunks
@@ -121,8 +157,21 @@ async function inspectQuestionEvidence(
   const resolvedContext = input?.context ?? null;
   const queryEmbedding = await dependencies.embeddings.embedQuery(question);
   const firstFiveQuestion = isFirstFiveSecondsQuestion(question);
+
+  let sourceUrls: string[] | undefined = undefined;
+  if (resolvedContext) {
+    sourceUrls = [];
+    if (videoIds.includes('A') && resolvedContext.videoA?.sourceUrl) {
+      sourceUrls.push(resolvedContext.videoA.sourceUrl);
+    }
+    if (videoIds.includes('B') && resolvedContext.videoB?.sourceUrl) {
+      sourceUrls.push(resolvedContext.videoB.sourceUrl);
+    }
+  }
+
   const relevantChunks = await dependencies.vectorStore.search(queryEmbedding, {
     videoId: videoIds.length === 1 ? videoIds[0] : undefined,
+    sourceUrls,
     topK: firstFiveQuestion ? 20 : 6
   });
 
@@ -133,7 +182,7 @@ async function inspectQuestionEvidence(
       .slice(0, 8)
     : relevantChunks;
 
-  const transcriptEvidence = await collectTranscriptEvidence(videoIds, dependencies.vectorStore);
+  const transcriptEvidence = await collectTranscriptEvidence(videoIds, dependencies.vectorStore, resolvedContext);
 
   const citations = retrievedChunks.length
     ? formatCitations(retrievedChunks as RetrievedChunk[])
@@ -218,12 +267,14 @@ async function buildPrompt(state: RagState, registry: VideoRegistry) {
   const allowMetadataFallback = !retrievedSummary;
 
   return [
-    'You are a concise creator analytics assistant for a social video RAG app.',
+    'You are an expert, highly thorough and extremely detailed creator analytics and video analysis assistant.',
+    'Your goal is to provide a deeply comprehensive, exhaustive, and fully articulated answer to the user\'s query, using all available context, transcript chunks, and metadata.',
+    'Do NOT be brief or concise. Explore every angle, provide extensive comparisons, detail strategies, breakdown creators\' hooks/engagement elements, and write rich, multi-paragraph explanations.',
     allowMetadataFallback
-      ? 'No transcript chunks were retrieved for these videos. You may use structured video metadata and descriptions to answer the user. Be explicit when a transcript is unavailable and avoid inventing verbatim spoken text.'
-      : 'Answer using evidence from the provided transcript chunks and video metadata where applicable.',
-    'Cite factual claims when they come from transcript chunks using the format [video_id:chunk_id].',
-    'If you rely on structured metadata (views/likes/comments/creator/description), you may cite it with [video_id:meta].',
+      ? 'No transcript chunks were retrieved for these videos. You must use structured video metadata, creator profiles, metrics, and descriptions to construct an exceptionally detailed analysis. Be explicit when a transcript is unavailable and analyze metadata thoroughly.'
+      : 'Analyze and answer using extensive evidence from the provided transcript chunks and video metadata. Elaborate on every point.',
+    'Always cite factual claims when they come from transcript chunks using the format [video_id:chunk_id]. You can cite multiple chunks to back up a comprehensive point.',
+    'If you rely on structured metadata (views/likes/comments/creator/description/tags), cite it with [video_id:meta].',
     '',
     `Conversation history:\n${buildConversationTranscript(state.conversationHistory)}`,
     '',
@@ -234,7 +285,9 @@ async function buildPrompt(state: RagState, registry: VideoRegistry) {
     '',
     `User question: ${state.question}`,
     '',
-    'Required output: a direct answer, then a short bullet list of citations. If no transcript evidence exists, use metadata and mark transcript as unavailable.'
+    'Required output format:',
+    '1. A highly detailed, rich, multi-paragraph analytical answer providing exhaustive details.',
+    '2. A formal list of citations corresponding to the sources used in your analysis.'
   ].join('\n');
 }
 
@@ -272,8 +325,10 @@ export function createRagEngine(dependencies: RagDependencies) {
     try {
       const generated = await llm.generate(
         [
-          'Generate a short chat title for a conversation about comparing two social videos.',
-          'Use 4 to 5 words only.',
+          'Generate a short, specific, and highly creative chat title for a conversation between a user and a video analysis assistant.',
+          'The title must directly describe the core topic of the user\'s question and the videos being discussed.',
+          'Do NOT use generic prefixes like "Comparing two...", "Comparison of...", or "Social Media Videos" unless they are uniquely relevant to the query.',
+          'Use 3 to 5 words only.',
           'Do not use quotes, punctuation, or numbering.',
           'Return title only.',
           '',
@@ -297,8 +352,21 @@ export function createRagEngine(dependencies: RagDependencies) {
     .addNode('retrieve', async (state: RagState) => {
       const queryEmbedding = await dependencies.embeddings.embedQuery(state.question);
       const firstFiveQuestion = isFirstFiveSecondsQuestion(state.question);
+
+      let sourceUrls: string[] | undefined = undefined;
+      if (state.context) {
+        sourceUrls = [];
+        if (state.videoIds.includes('A') && state.context.videoA?.sourceUrl) {
+          sourceUrls.push(state.context.videoA.sourceUrl);
+        }
+        if (state.videoIds.includes('B') && state.context.videoB?.sourceUrl) {
+          sourceUrls.push(state.context.videoB.sourceUrl);
+        }
+      }
+
       const relevantChunks = await dependencies.vectorStore.search(queryEmbedding, {
         videoId: state.videoIds.length === 1 ? state.videoIds[0] : undefined,
+        sourceUrls,
         topK: firstFiveQuestion ? 20 : 6
       });
 
@@ -314,7 +382,11 @@ export function createRagEngine(dependencies: RagDependencies) {
       };
     })
     .addNode('collect-evidence', async (state: RagState) => {
-      const transcriptEvidence = await collectTranscriptEvidence(state.videoIds, dependencies.vectorStore);
+      const transcriptEvidence = await collectTranscriptEvidence(
+        state.videoIds,
+        dependencies.vectorStore,
+        state.context
+      );
 
       return {
         transcriptEvidence
@@ -451,10 +523,11 @@ export function createRagEngine(dependencies: RagDependencies) {
       inspectQuestionEvidence(question, dependencies, input),
     async *streamAnswer(question: string, input?: AnswerInput) {
       const response = await answerQuestion(question, input);
-      const tokens = response.answer.match(/.{1,80}/g) ?? [response.answer];
+      const answer = response.answer;
+      const chunkSize = 40;
 
-      for (const token of tokens) {
-        yield { type: 'token' as const, token };
+      for (let i = 0; i < answer.length; i += chunkSize) {
+        yield { type: 'token' as const, token: answer.slice(i, i + chunkSize) };
       }
 
       yield {

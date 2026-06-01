@@ -20,6 +20,7 @@ const envSchema = z.object({
   CLERK_PUBLISHABLE_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-3.1-flash-lite'),
+  GROQ_API_KEY: z.string().optional(),
   GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-2'),
   DATABASE_URL: z.string().optional(),
   VECTOR_STORE: z.enum(['pgvector', 'qdrant', 'chroma', 'pinecone', 'weaviate']).default('pgvector'),

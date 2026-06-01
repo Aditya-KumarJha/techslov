@@ -9,6 +9,15 @@ export type TranscriptEvidenceChunk = TranscriptChunk & {
 
 export interface VectorStoreAdapter {
   upsertChunks(chunks: EmbeddedTranscriptChunk[]): Promise<void>;
-  search(queryEmbedding: number[], filters?: { videoId?: 'A' | 'B'; topK?: number }): Promise<TranscriptEvidenceChunk[]>;
+  search(
+    queryEmbedding: number[],
+    filters?: {
+      videoId?: 'A' | 'B';
+      sourceUrl?: string;
+      sourceUrls?: string[];
+      topK?: number;
+    }
+  ): Promise<TranscriptEvidenceChunk[]>;
   listByVideoId(videoId: 'A' | 'B'): Promise<TranscriptEvidenceChunk[]>;
+  listBySourceUrl(sourceUrl: string): Promise<TranscriptEvidenceChunk[]>;
 }
